@@ -9,8 +9,9 @@
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
-import csv
+import csv # to import csv files
 import os
+import networkx as nx # to build a grid networkx object
 
 def read_nodes(filename):
     dic = dict()
@@ -64,8 +65,18 @@ def read_additional_param(filename):
             dic[(row[0])] = float(row[1])
     return dic
 
-os.chdir('c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\adi_simple1\\') #temporarily code for setting location
-#a = read_nodes('grid_nodes.csv')
-#b = read_edges('grid_edges.csv')
-#c = read_scenarios('scenario_failures.csv', 'scenario_probabilities.csv')
-d = read_additional_param('additional_params.csv')
+def build_nx_grid(nodes, edges):
+    G = nx.Graph() # initialize graph using networkx library
+    for node in [i[1] for i in nodes.keys() if i[0] == 'd']:
+        G.add_node(node,
+                   demand = max(0, nodes[('d', node)]),
+                   original_demand = max(0, nodes[('d', node)]),
+                   gen_cap = nodes[('c', node)],
+                   generated = min(0, nodes[('d', node)]),
+                   un_sup_cost = 0)
+    for edge in [(i[1],i[2]) for i in edges.keys() if i[0] == 'c' and edges[i]>0]:
+        G.add_edge(edge[0], edge[1], capacity = edges[('c',) + edge],
+                   susceptance = edges[('x',) + edge])
+    return G
+
+
