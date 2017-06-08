@@ -88,6 +88,15 @@ def build_cplex_problem(nodes, edges, scenarios, params):
             dvar_ub.append(tot_demand)
             dvar_type.append('C')
 
+            # define failed edges
+            dvar_name.append('F_' + edge_str + 's' + cur_scenario)
+            dvar_location[('F', cur_edge, cur_scenario)] = len(dvar_name)
+            dvar_obj_coef.append(0)
+            dvar_lb.append(0)
+            dvar_ub.append(1)
+            dvar_type.append('B')
+
+
         # define capacity upgrade constraints
         dvar_name.append('c_' + edge_str)
         dvar_location[('c', cur_edge)] = len(dvar_name)
@@ -115,12 +124,58 @@ def build_cplex_problem(nodes, edges, scenarios, params):
     # building the decision variables within object
     robust_opt.variables.add(obj = dvar_obj_coef, lb = dvar_lb, ub = dvar_ub, types = dvar_type, names = dvar_name)
 
-    # build constraints
+    # build constraints (all except for cascade inducing constraints)
+    # Conservation of flow
+
+    # Phase angle constraints -M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*F_ij
+
+    # Phase angle for potential edges -M*X_ij <= theta_i-theta_j-x_ij*f_ij <= M*X_ij
+
+    # Transmission capacity for potential edges -M*X_ij <= f_ij <= M*X_ij
+
+    # Don't use failed edges M*(1-F_ij) <= f_ij <= M*(1-F_ij)
+
+    # Generation capacity g_i <= c0_i + cg_i   and   g_i <= M*Z_i
+
+    # Investment cost constraint sum(h_ij*cl_ij) + sum(h_i*cg_i + H_i*Z_i) + sum(H_ij*X_ij) <= C
+
+
+
+
+
+
+
 
     return robust_opt
 
 
 
-# Build lazycallbacks
 
+
+# Build lazycallbacks
+# This class is called when integer-feasible solution candidate has been identified
+# at one of the B&B tree nodes.
+class MyLazy(LazyConstraintCallback):
+    # global var_names # TEMPORARY ADDED FOR DEBUGGING! DELETE LATER
+    def __call__(self): # read current integer solution and add violated valid inequality.
+        cur_row = []
+        sol1 = self.get_values()
+        cycle1 = GetCycle(sol1)
+        #print "***** Found cycle:", cycle1, "*****"
+        notincycle = [a for a in range(num_nodes) if (a not in cycle1)]
+        if len(cycle1) < num_nodes: # case we do have a cycle smaller than the entire graph
+            for i in cycle1:
+                for j in notincycle:
+                    cur_row.append(mapij(i,j))
+            cur_coef = [1]*len(cur_row)
+            # here we add the constraint:
+            #print "***** Trying to add...: *****"
+            #adding = []
+            #for a in cur_row:
+            #    adding.append(var_names[a])
+            #print adding
+            self.add(constraint = [cur_row, cur_coef], sense = "G", rhs = 1) #cplex.SparsePair(ind=cur_row, val=cur_coef)
+            #print "***** Successfully added *****"
+        else:
+            pass
 
