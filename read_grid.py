@@ -32,10 +32,11 @@ def read_edges(filename):
         csv_reader = csv.reader(edgesfile, delimiter = ',')
         next(csv_reader) # assuimng header, skip first line
         for row in csv_reader:
-            dic[('c', row[0], row[1])] = float(row[2]) # current capacity
-            dic[('x', row[0], row[1])] = float(row[3]) # susceptance
-            dic[('H', row[0], row[1])] = float(row[4]) # fixed cost
-            dic[('h', row[0], row[1])] = float(row[4]) # variable cost
+            cur_edge = arrange_edge_minmax(row[0], row[1])
+            dic[('c',) + cur_edge] = float(row[2]) # current capacity
+            dic[('x',) + cur_edge] = float(row[3]) # susceptance
+            dic[('H',) + cur_edge] = float(row[4]) # fixed cost
+            dic[('h',) + cur_edge] = float(row[4]) # variable cost
     return dic
 
 def read_scenarios(filename_fail, filename_pr):
@@ -79,4 +80,6 @@ def build_nx_grid(nodes, edges):
                    susceptance = edges[('x',) + edge])
     return G
 
-
+def arrange_edge_minmax(edge_i, edge_j):
+    tmp = (min(edge_i, edge_j), max(edge_i, edge_j))
+    return tmp
