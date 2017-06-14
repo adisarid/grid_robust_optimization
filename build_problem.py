@@ -155,15 +155,58 @@ def build_cplex_problem(nodes, edges, scenarios, params):
                 phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], bigM]
                 robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "G", rhs = [0])
 
-    # Phase angle for potential edges -M*X_ij <= theta_i-theta_j-x_ij*f_ij <= M*X_ij
+                # Phase angle for potential edges -M*X_ij <= theta_i-theta_j-x_ij*f_ij <= M*X_ij     *** notice that X is not dependant in scenario but theta and f do depend
+                if cur_edge in [(i[1], i[2]) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]:
+                    # only run if edge has a fixed establishment cost parameter (H)
+                    # Less than equal side
+                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)]]
+                    phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], -bigM]
+                    robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "L", rhs = [0])
+                    # Greater than equal side
+                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)]]
+                    phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], bigM]
+                    robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "G", rhs = [0])
 
-    # Transmission capacity for potential edges -M*X_ij <= f_ij <= M*X_ij
+                    # Transmission capacity for potential edges -M*X_ij <= f_ij <= M*X_ij
+                    # Less than equal side
+                    disable_flow_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)]]
+                    disable_flow_lhs_coef = [1, -bigM]
+                    robust_opt.linear_constraints.add(lin_expr = [[disable_flow_lhs, disable_flow_lhs_coef]], senses = "L", rhs = [0])
+                    # Greater than equal side
+                    disable_flow_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)]]
+                    disable_flow_lhs_coef = [1, bigM]
+                    robust_opt.linear_constraints.add(lin_expr = [[disable_flow_lhs, disable_flow_lhs_coef]], senses = "G", rhs = [0])
 
-    # Don't use failed edges M*(1-F_ij) <= f_ij <= M*(1-F_ij)
+                    # Don't use failed edges -M*(1-F_ij) <= f_ij <= M*(1-F_ij)
+                    # Less than equal side
+                    fail_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
+                    fail_lhs_coef = [1, bigM]
+                    robust_opt.linear_constraints.add(lin_expr = [[fail_lhs, fail_lhs_coef]], senses = "L", rhs = [bigM])
 
-    # Generation capacity g_i <= c0_i + cg_i   and   g_i <= M*Z_i
+                    # Greater than equal side
+                    fail_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
+                    fail_lhs_coef = [1, -bigM]
+                    robust_opt.linear_constraints.add(lin_expr = [[fail_lhs, fail_lhs_coef]], senses = "G", rhs = [-bigM])
 
+            # Finished iterating over edges, continuing to iterate over scenarios, and nodes
+            # Generation capacity g_i <= c0_i + cg_i
+            gen_cap_lhs = [dvar_pos[('g', cur_node, scenario)], dvar_pos[('c', cur_node)]]
+            gen_cap_lhs_coef = [1, -1]
+            robust_opt.linear_constraints.add(lin_expr = [[gen_cap_lhs, gen_cap_lhs_coef]], senses = "L", rhs = [nodes[('c', cur_node)]])
+            # Generation capacity g_i <= M*Z_i
+            gen_cap_lhs = [dvar_pos[('g', cur_node, scenario)], dvar_pos[('Z', cur_node)]]
+            gen_cap_lhs_coef = [1, -bigM]
+            robust_opt.linear_constraints.add(lin_expr = [[gen_cap_lhs, gen_cap_lhs_coef]], senses = "L", rhs = [nodes[('c', cur_node)]])
+
+    # Last constraint - budget
     # Investment cost constraint sum(h_ij*cl_ij) + sum(h_i*cg_i + H_i*Z_i) + sum(H_ij*X_ij) <= C
+    budget_lhs = [dvar_pos[('c', cur_edge)] for cur_edge in all_edges] + [dvar_pos[('c', cur_node)] for cur_node in all_nodes] + \
+                 [dvar_pos[('Z', cur_node)] for cur_node in all_nodes if ('H', cur_node) in nodes.keys()] + \
+                 [dvar_pos[('X_', (i[1], i[2]))] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
+    budget_lhs_coef = [edges[('h',) + cur_edge] for cur_edge in all_edges] + [nodes[('h', cur_node)] for cur_node in all_nodes] + \
+                 [nodes[('H',cur_node)] for cur_node in all_nodes if ('H',cur_node) in nodes.keys()] + \
+                 [edges[('H',)+(i[1], i[2])] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
+    robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [params['C']])
 
 
 
