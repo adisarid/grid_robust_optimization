@@ -25,7 +25,7 @@ def build_cplex_problem(nodes, edges, scenarios, params):
 
     # epsilon
     epsilon = 1e-10 # depending on grid size, this constant can take various values 1e-10 is probably small enough for any practical situation
-
+    bigM = 1.0/epsilon
     tot_demand = sum([nodes[i] for i in nodes.keys() if i[0] == 'd'])
 
     # list scenarios
@@ -127,25 +127,33 @@ def build_cplex_problem(nodes, edges, scenarios, params):
 
     # build constraints (all except for cascade inducing constraints)
 
-    for node in all_nodes:
+    for cur_node in all_nodes:
         flow_lhs = []
         flow_lhs_coef = []
         flow_rhs = []
-        assoc_edges = get_associated_edges(node, all_edges)
+        assoc_edges = get_associated_edges(cur_node, all_edges)
         for scenario in all_scenarios:
             # Conservation of flow sum(f_ji)- sum(f_ij) + g_i - w_i = 0 (total incoming - outgoing + generated - supplied = 0)
             flow_lhs = [dvar_pos[('f', edge, scenario)] for edge in assoc_edges['in']] + [dvar_pos[('f', edge, scenario)] for edge in assoc_edges['out']] + \
-                       [dvar_pos[('g', node, scenario)]]
+                       [dvar_pos[('g', cur_node, scenario)]]
             flow_lhs_coef = [1 for edge in assoc_edges['in']] + [-1 for edge in assoc_edges['out']] + [1]
-            flow_rhs = 0
-            if nodes[('d', node)] > 0:
+            if nodes[('d', cur_node)] > 0:
                 # case this node (has demand)
-                flow_lhs += [dvar_pos[('w', node, scenario)]]
+                flow_lhs += [dvar_pos[('w', cur_node, scenario)]]
                 flow_lhs_coef += [-1]
-            robust_opt.linear_constraints.add(lin_expr = [[flow_lhs, flow_lhs_coef]], senses = "E", rhs = [flow_rhs])
+            robust_opt.linear_constraints.add(lin_expr = [[flow_lhs, flow_lhs_coef]], senses = "E", rhs = [0])
 
-            # Phase angle constraints -M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*F_ij
-
+            for cur_edge in assoc_edges['out']:
+                # using only outgoing edges incoming will be covered as "outgoing" at a different node
+                # Phase angle constraints -M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*F_ij
+                # Less than equal side
+                phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
+                phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], -bigM]
+                robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "L", rhs = [0])
+                # Greater than equal side
+                phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
+                phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], bigM]
+                robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "G", rhs = [0])
 
     # Phase angle for potential edges -M*X_ij <= theta_i-theta_j-x_ij*f_ij <= M*X_ij
 
