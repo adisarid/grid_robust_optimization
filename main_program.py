@@ -37,23 +37,25 @@ grid = build_nx_grid(nodes, edges)
 
 # build problem
 cplex_problem = build_problem.build_cplex_problem(nodes, edges, scenarios, params)
+cplex_problem.write("c:/temp/tmp_robust_lp.lp")
+#robust_opt_cplex.register_callback(MyLazy) # register the lazy callback
 
-try:  # Exception handling just in case something goes wrong with the solver
-
-    cplex_problem.solve()  #solve the model
-    # solution.get_status() returns an integer code
-    print "Solution status = " , cplex_problem.solution.get_status(), ":",
-    # the following line prints the corresponding status string
-    print cplex_problem.solution.status[cplex_problem.solution.get_status()]
-
-    print "Objective value = " , cplex_problem.solution.get_objective_value()
-    print "User cuts applied: " + str(cplex_problem.solution.MIP.get_num_cuts(cplex_problem.solution.MIP.cut_type.user))
-
-    # export the obtained solution to a file
-    export_results.write_results(cplex_problem)
-
-except CplexError, exc:
-    print exc
+##try:  # Exception handling just in case something goes wrong with the solver
+##
+##    robust_opt_cplex.solve()  #solve the model
+##    # solution.get_status() returns an integer code
+##    print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
+##    # the following line prints the corresponding status string
+##    print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
+##
+##    print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
+##    print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
+##
+##    # export the obtained solution to a file
+##    export_results.write_results(robust_opt_cplex)
+##
+##except CplexError, exc:
+##    print exc
 
 
 
