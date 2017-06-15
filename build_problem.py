@@ -14,6 +14,7 @@ from cplex.callbacks import LazyConstraintCallback # import class for lazy callb
 import compute_cascade # needed for the lazy call backs algorithm
 
 def build_cplex_problem(nodes, edges, scenarios, params):
+    global dvar_pos # used as global to allow access across all functions
 
     # initialize variable vector with variable name
     dvar_name = []
@@ -53,7 +54,7 @@ def build_cplex_problem(nodes, edges, scenarios, params):
                 dvar_type.append('C')
 
             # phase angle (theta)
-            dvar_name.append('theta' + cur_node + 's' + cur_scenario)
+            dvar_name.append('theta_' + cur_node + 's' + cur_scenario)
             dvar_pos[('theta', cur_node, cur_scenario)] = len(dvar_name)-1
             dvar_obj_coef.append(0)
             dvar_lb.append(0)
@@ -208,27 +209,33 @@ def build_cplex_problem(nodes, edges, scenarios, params):
                  [edges[('H',)+(i[1], i[2])] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
     robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [params['C']])
 
-
-
-
-
-
-
-
+    # Finished defining the main problem - returning cplex object:
     return robust_opt
-
-
 
 
 
 # Build lazycallbacks
 # This class is called when integer-feasible solution candidate has been identified
 # at one of the B&B tree nodes.
-##class MyLazy(LazyConstraintCallback):
+# The function checks if given the installment decisions of X, C, and Z at each of the scenarios,
+# if the failures are consistent with the failures in the solution.
+# If there are inconsistencies then the violated constraints are added
+
+class MyLazy(LazyConstraintCallback):
 ##    # global var_names # TEMPORARY ADDED FOR DEBUGGING! DELETE LATER
-##    def __call__(self): # read current integer solution and add violated valid inequality.
-##        cur_row = []
-##        sol1 = self.get_values()
+    def __call__(self): # read current integer solution and add violated valid inequality.
+
+        global dvar_pos # position variable is global
+
+        cur_row = []
+        sol1 = self.get_values()
+        # build new grid based on solution
+
+        # fail initial edges based on scenarios
+
+        # see if cascade failures are consistent with F decision variables
+
+        # if not, add failures in the cases for X, c, and Z
 ##        cycle1 = GetCycle(sol1)
 ##        #print "***** Found cycle:", cycle1, "*****"
 ##        notincycle = [a for a in range(num_nodes) if (a not in cycle1)]
@@ -245,8 +252,8 @@ def build_cplex_problem(nodes, edges, scenarios, params):
 ##            #print adding
 ##            self.add(constraint = [cur_row, cur_coef], sense = "G", rhs = 1) #cplex.SparsePair(ind=cur_row, val=cur_coef)
 ##            #print "***** Successfully added *****"
-##        else:
-##            pass
+##       else:
+##          pass
 
 
 def get_associated_edges(node, all_edges):
