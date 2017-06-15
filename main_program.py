@@ -22,23 +22,22 @@ from read_grid import * # read grid and parameters from csv file
 import build_problem # build the cplex problem object and set the lazy callback function
 import export_results # export solution results into csv file for later handling
 
-# set intance to solve as a robust planning problem
-instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\adi_simple1\\'
+# using global variables for easy reading into lazy callback class
+from read_grid import nodes, edges, scenarios, params
 
-# read parameters of grid
-nodes = read_nodes(instance_location + 'grid_nodes.csv')
-edges = read_edges(instance_location + 'grid_edges.csv')
-scenarios = read_scenarios(instance_location + 'scenario_failures.csv', instance_location + 'scenario_probabilities.csv')
-params = read_additional_param(instance_location + 'additional_params.csv')
+
 
 # create the initial grid as an networkx object
 grid = build_nx_grid(nodes, edges)
 
 
 # build problem
-cplex_problem = build_problem.build_cplex_problem(nodes, edges, scenarios, params)
-cplex_problem.write("c:/temp/tmp_robust_lp.lp")
+robust_opt_cplex = build_problem.build_cplex_problem()
+robust_opt_cplex.write("c:/temp/tmp_robust_lp.lp")
+
 #robust_opt_cplex.register_callback(MyLazy) # register the lazy callback
+
+robust_opt_cplex.solve()
 
 ##try:  # Exception handling just in case something goes wrong with the solver
 ##

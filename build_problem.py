@@ -12,9 +12,12 @@
 import cplex # for building and interfacing with cplex api
 from cplex.callbacks import LazyConstraintCallback # import class for lazy callbacks
 import compute_cascade # needed for the lazy call backs algorithm
+from read_grid import nodes, edges, scenarios, params # using global variables for easy reading into lazy callback class
 
-def build_cplex_problem(nodes, edges, scenarios, params):
+
+def build_cplex_problem():
     global dvar_pos # used as global to allow access across all functions
+    #global nodes, edges, scenarios, params # access raw data across functions as globals
 
     # initialize variable vector with variable name
     dvar_name = []
@@ -226,11 +229,12 @@ class MyLazy(LazyConstraintCallback):
     def __call__(self): # read current integer solution and add violated valid inequality.
 
         global dvar_pos # position variable is global
-
+        #global nodes, edges, scenarios, params # access raw data across functions as globals
         cur_row = []
-        sol1 = self.get_values()
-        # build new grid based on solution
+        current_solution = self.get_values()
 
+        # build new grid based on solution
+        G = create_grid(nodes, edges, current_solution)
         # fail initial edges based on scenarios
 
         # see if cascade failures are consistent with F decision variables

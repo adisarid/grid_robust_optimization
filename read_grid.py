@@ -13,6 +13,10 @@ import csv # to import csv files
 import os
 import networkx as nx # to build a grid networkx object
 
+
+# set intance to solve as a robust planning problem
+instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\adi_simple1\\'
+
 def read_nodes(filename):
     dic = dict()
     with open(filename, 'rb') as nodesfile:
@@ -83,3 +87,10 @@ def build_nx_grid(nodes, edges):
 def arrange_edge_minmax(edge_i, edge_j):
     tmp = (min(edge_i, edge_j), max(edge_i, edge_j))
     return tmp
+
+
+# read parameters of grid
+nodes = read_nodes(instance_location + 'grid_nodes.csv')
+edges = read_edges(instance_location + 'grid_edges.csv')
+scenarios = read_scenarios(instance_location + 'scenario_failures.csv', instance_location + 'scenario_probabilities.csv')
+params = read_additional_param(instance_location + 'additional_params.csv')
