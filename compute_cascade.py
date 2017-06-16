@@ -53,8 +53,9 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     for cur_edge in edge_list:
         # first check for edge upgrades
         cap_upgrade = current_solution[dvar_pos[('c', cur_edge)]]
-        if (edges[('c',) + cur_edge] > 0 or cap_upgrade > 0):
+        if (edges[('c',) + cur_edge] > 0 or current_solution[dvar_pos[('X_', cur_edge)]> 0.01]):
             # if edge exists or was established and upgraded
             G.add_edge(cur_edge[0], cur_edge[1], capacity = edges[('c',) + cur_edge] + cap_upgrade , susceptance = edges[('x',) + cur_edge])
 
+    # STOPPED HERE (17/06/2017) Continue from here (with optimization of new graph.
 
