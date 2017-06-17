@@ -69,47 +69,6 @@ def update_grid(G, failed_edges):
                 G.node[node]['generated'] = G.node[node]['gen_cap']*gen_factor
 
 
-def compute_flow(G):
-    """
-    The function computes the new flow inside graph G, a networkx object with custom fields 'demand', 'gen_cap' and 'generated'.
-    The function updates G with flow in each edge.
-    Returns a list of tuples with failed edges.
-    """
-    # Switch to a more stable approach, e.g., using network_simplex or otherwise (retiring this function and moving to a new one "grid_flow_update".
-    # first, we need to initialize the array A from the equation A*(\Theta) = P
-    # \Theta is the phase angle vector, A is the admittance matrix and P is the demand/generation vector
-    # Create A:
-    num_nodes = len(G.node)
-    A = np.zeros((num_nodes, num_nodes)) # For simplicity I assume that edge names are numeric, iterable and usable as indicator to array location
-    for u in G.edges():
-        # I use int(u) and int(v) since I got a deprecation warning. In the future I should create some kind of name<->number dictionary
-        A[(int(u[0])-1, int(u[1])-1)] = -1.0 / G.edge[u[0]][u[1]]['susceptance']
-        A[(int(u[1])-1, int(u[0])-1)] = -1.0 / G.edge[u[0]][u[1]]['susceptance'] #(note that susceptance is symmetric)
-    for i in range(num_nodes):
-        A[(i,i)] = -sum([A[(i,j)] for j in range(num_nodes) if j!=i])
-    # Create P:
-    P = np.array([G.node[u+1]['generated'] - G.node[u+1]['demand'] for u in range(num_nodes)])
-    flow_solution =  np.linalg.lstsq(A, P) #A might be singular in some cases, hence using least squares, insead of direct np.linalg.solve(A,P)
-    #flow_solution_dbg_tst = np.linalg.solve(A, P) # For debugging purposes, want to see if solve and lstsq lead to the same flow solution
-    # define tolarance to eliminate effectively zero values
-    tol = 1e-10
-    theta = [(flow_solution[0][i])*(abs(flow_solution[0][i]) > tol) for i in range(num_nodes)]
-    #theta_dbg_tst = [(flow_solution_dbg_tst[i])*(abs(flow_solution_dbg_tst[i]) > tol) for i in range(num_nodes)]
-    # now that we have theta, we can freely update the flow in G's edges
-    tmp_failed = []
-    new_flow = dict()
-    #new_flow_dbg_tst = dict()
-    for u in G.edges():
-        i = int(u[0]) - 1
-        j = int(u[1]) - 1
-        new_flow[u] = (theta[i]-theta[j])/G.edge[u[0]][u[1]]['susceptance']
-        #new_flow_dbg_tst[u] = (theta_dbg_tst[i]-theta_dbg_tst[j])/G.edge[u[0]][u[1]]['susceptance']
-        if abs(new_flow[u]) > G.edge[u[0]][u[1]]['capacity']:
-            tmp_failed.append(u)
-    #print 'New flow by linalg.lstsq:', new_flow
-    #print 'New flow by linalg.solve:', new_flow_dbg_tst
-    return(tmp_failed, new_flow)
-
 def cfe(G, init_fail_edges, write_solution_file = False):
     """
     Simulates a cascade failure evolution (the CFE - algorithm 1 in paper)
@@ -145,13 +104,13 @@ def cfe(G, init_fail_edges, write_solution_file = False):
 
 
 def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object = False, return_flow_list = False):
-    '''
+    """
     The following function modifies G after failure of edges in failed_edges,
     After which the function re-computes the flows, demand, and supply using CPLEX engine
     Eventually, the function returns a set of new failed edges.
     This function replaces the previous update_grid and compute_flow
     Adi, 31/07/2016.
-    '''
+    """
 
     # First step, go over failed edges and omit them from G
     G.remove_edges_from(failed_edges)
@@ -180,7 +139,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     # define unsupplied demand, generation, and theta variables (continuous, non-negative)
     for curr_node in G.nodes():
         # unsupplied demand variable
-        dvar_name.append('ud' + str(int(curr_node)))
+        dvar_name.append('ud' + str(curr_node))
         dvar_obj_coef += [G.node[curr_node]['un_sup_cost']]
         dvar_type += 'C'
         dvar_pos[('ud', curr_node)] = counter
@@ -188,7 +147,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
         dvar_ub += [10**4] # [G.node[curr_node]['original_demand']] # no need for an unsupplied demand upper bound - also made some problems
         counter += 1
         # theta variable
-        dvar_name.append('theta' + str(int(curr_node)))
+        dvar_name.append('theta' + str(curr_node))
         dvar_obj_coef += [0]
         dvar_type += 'C'
         dvar_pos[('theta', curr_node)] = counter
@@ -197,7 +156,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
         counter += 1
         # generation variables (continouous non-negative)
         if G.node[curr_node]['gen_cap'] > 0:
-            dvar_name.append('g' + str(int(curr_node)))
+            dvar_name.append('g' + str(curr_node))
             dvar_obj_coef += [G.node[curr_node]['gen_cost']]
             dvar_type += 'C'
             dvar_pos[('g', curr_node)] = counter

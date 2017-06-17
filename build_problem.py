@@ -17,7 +17,6 @@ from read_grid import nodes, edges, scenarios, params # using global variables f
 
 def build_cplex_problem():
     global dvar_pos # used as global to allow access across all functions
-    #global nodes, edges, scenarios, params # access raw data across functions as globals
 
     # initialize variable vector with variable name
     dvar_name = []
@@ -51,7 +50,7 @@ def build_cplex_problem():
             if nodes[('d', cur_node)] > 0:
                 dvar_name.append('w_' + cur_node + 's' + cur_scenario)
                 dvar_pos[('w', cur_node, cur_scenario)] = len(dvar_name)-1
-                dvar_obj_coef.append(-scenarios[('s_pr', cur_node)]) # scenario relative weight
+                dvar_obj_coef.append(scenarios[('s_pr', cur_node)]) # scenario relative weight
                 dvar_lb.append(0)
                 dvar_ub.append(nodes[('d', cur_node)])
                 dvar_type.append('C')
@@ -124,7 +123,7 @@ def build_cplex_problem():
 
     # initialize cplex object
     robust_opt = cplex.Cplex()
-    robust_opt.objective.set_sense(robust_opt.objective.sense.minimize) # minimize expected loss of load
+    robust_opt.objective.set_sense(robust_opt.objective.sense.maximize) # maximize supplied energy "=" minimize expected loss of load
 
     # building the decision variables within object
     robust_opt.variables.add(obj = dvar_obj_coef, lb = dvar_lb, ub = dvar_ub, types = dvar_type, names = dvar_name)
@@ -213,7 +212,7 @@ def build_cplex_problem():
     robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [params['C']])
 
     # Finished defining the main problem - returning cplex object:
-    return robust_opt
+    return {'cplex_problem': robust_opt, 'cplex_location_dictionary': dvar_pos}
 
 
 
@@ -227,19 +226,24 @@ def build_cplex_problem():
 class MyLazy(LazyConstraintCallback):
 ##    # global var_names # TEMPORARY ADDED FOR DEBUGGING! DELETE LATER
     def __call__(self): # read current integer solution and add violated valid inequality.
-
+        print "I'm in the lazy call back!"
         global dvar_pos # position variable is global
-        #global nodes, edges, scenarios, params # access raw data across functions as globals
         cur_row = []
+
         current_solution = self.get_values()
 
-        # build new grid based on solution
-        G = create_grid(nodes, edges, current_solution)
-        # fail initial edges based on scenarios
+        # build new grid based on solution and return the inconsistent failrues
+        #inconsistent_failures = compute_failed_inconsistent(nodes, edges, current_solution, dvar_pos)
+        inconsistent_failures = []
+        if inconsistent_failures != []:
+            # see if cascade failures are inconsistent with F decision variables and add only the inconsistent variables as new constraints
+            # Add failures in the cases for X, c, and Z
+            pass
 
-        # see if cascade failures are consistent with F decision variables
+        else:
+            pass
 
-        # if not, add failures in the cases for X, c, and Z
+
 ##        cycle1 = GetCycle(sol1)
 ##        #print "***** Found cycle:", cycle1, "*****"
 ##        notincycle = [a for a in range(num_nodes) if (a not in cycle1)]
@@ -258,6 +262,10 @@ class MyLazy(LazyConstraintCallback):
 ##            #print "***** Successfully added *****"
 ##       else:
 ##          pass
+
+
+
+
 
 
 def get_associated_edges(node, all_edges):

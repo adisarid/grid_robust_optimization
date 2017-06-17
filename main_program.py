@@ -25,19 +25,19 @@ import export_results # export solution results into csv file for later handling
 # using global variables for easy reading into lazy callback class
 from read_grid import nodes, edges, scenarios, params
 
-
-
-# create the initial grid as an networkx object
-grid = build_nx_grid(nodes, edges)
-
-
 # build problem
-robust_opt_cplex = build_problem.build_cplex_problem()
+
+build_results = build_problem.build_cplex_problem()
+robust_opt_cplex = build_results['cplex_problem']
+dvar_pos = build_results['cplex_location_dictionary'] # useful for debugging
+
 robust_opt_cplex.write("c:/temp/tmp_robust_lp.lp")
 
-#robust_opt_cplex.register_callback(MyLazy) # register the lazy callback
+robust_opt_cplex.register_callback(build_problem.MyLazy) # register the lazy callback
 
 robust_opt_cplex.solve()
+
+current_solution = robust_opt_cplex.solution.get_values() # for debugging purposes
 
 ##try:  # Exception handling just in case something goes wrong with the solver
 ##

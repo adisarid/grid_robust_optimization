@@ -10,8 +10,9 @@
 #-------------------------------------------------------------------------------
 
 import networkx as nx
+import cascade_simulator_aux # for computing the cascades
 
-def compute_failed_inconsistent(nodes, edges, current_solution, dvar_pos):
+def compute_failed_inconsistent(nodes, edges, scenarios, current_solution, dvar_pos):
     """
     Function builds grid based on original grid and infrastructure decisions from dvar_pos
     Then the cfe algorithm is run to determine which edges should fail in each scenario
@@ -20,42 +21,37 @@ def compute_failed_inconsistent(nodes, edges, current_solution, dvar_pos):
     If no inconsistencies are found then the function returns an empty list
     """
 
-    grid = build_nx_grid(nodes, edges)
+    init_grid = build_nx_grid(nodes, edges, current_solution, dvar_pos) # build initial grid
+    scenario_list = [cur_sce[1] for cur_sce in scenarios.keys() if cur_sce[0] == 's_pr'] # get scenario list
+    end_game_failed = dict() # initialize edge failure dictionary
+    for cur_scenario in scenario_list:
+        init_fail_edges = scenarios[('s', cur_scenario)]
+        G = init_grid.copy() # the cfe command runs over the grid so this is why I create a copy
+        end_game_failed[cur_scenario] = cascade_simulator_aux.cfe(G, init_fail_edges, write_solution_file = False)
 
 
-
-
-# create the initial grid as an networkx object
 
 
 def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     """
-    Used to build the grid, consistent with function create_grid from previous work under cascade simulator
+    Create the initial grid as an networkx object.
+    Used to build the grid, consistent with function create_grid from previous work under cascade simulator.
+    Function has been optimized to add the nodes and edges as a bunch, using a single command and doing the prep work
+    via list comprehension of the edges and nodes.
     """
 
     G = nx.Graph() # initialize empty graph
 
-    # CODE CAN BE OPTIMIZED BY:
-    # Use list comprehention to load all nodes and edges
-    # by add_nodes_from and add_edges_from
-    # For now, continuouing with regular loops - easier to read:
-
     # add all nodes
     node_list = [node[1] for node in nodes.keys() if node[0] == 'd']
-    for cur_node in node_list:
-        # first check for upgrades
-        cap_upgrade = current_solution[dvar_pos[('c', cur_node)]]
-        # create the updated node
-        G.add_node(cur_node, demand = nodes[('d', cur_node)], gen_cap = nodes[('c', cur_node)] + cap_upgrade, generated = 0) # initialize generated as 0.
+    add_nodes = [(cur_node, {'demand': nodes[('d', cur_node)],'gen_cap':nodes[('c', cur_node)] + current_solution[dvar_pos[('c', cur_node)]], 'generated':0, 'un_sup_cost':0, 'gen_cost':0, 'original_demand': nodes[('d', cur_node)]}) for cur_node in node_list]
+    G.add_nodes_from(add_nodes)
 
     # add all edges
     edge_list = [(edge[1], edge[2]) for edge in edges if edge[0] == 'c']
-    for cur_edge in edge_list:
-        # first check for edge upgrades
-        cap_upgrade = current_solution[dvar_pos[('c', cur_edge)]]
-        if (edges[('c',) + cur_edge] > 0 or current_solution[dvar_pos[('X_', cur_edge)]> 0.01]):
-            # if edge exists or was established and upgraded
-            G.add_edge(cur_edge[0], cur_edge[1], capacity = edges[('c',) + cur_edge] + cap_upgrade , susceptance = edges[('x',) + cur_edge])
+    add_edges = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]], 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0 or current_solution[dvar_pos[('X_', cur_edge)]> 0.01])]
+    G.add_edges_from(add_edges)
 
-    # STOPPED HERE (17/06/2017) Continue from here (with optimization of new graph.
+    return(G)
+
 
