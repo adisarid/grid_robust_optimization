@@ -48,7 +48,7 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     G.add_nodes_from(add_nodes)
 
     # add all edges
-    edge_list = [(edge[1], edge[2]) for edge in edges if edge[0] == 'c']
+    edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges if edge[0] == 'c']
     add_edges = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]], 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0 or current_solution[dvar_pos[('X_', cur_edge)]> 0.01])]
     G.add_edges_from(add_edges)
 
