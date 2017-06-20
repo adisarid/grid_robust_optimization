@@ -90,7 +90,7 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     i = 0
     while F[i]:  # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
-        lpfilename = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disable later on.
+        lpfilename = "c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disable later on.
         tmp_grid_flow_update = grid_flow_update(G, F[i], lpfilename, False, True) # true for returning the cplex object - will enable us to retrive flow variabels
         F[i+1] =  tmp_grid_flow_update['failed_edges'] # lines 3-5 in algorithm - find new set of edge failures. Modified method for flow solution - using cplex engine.
         flowsteps[i] = tmp_grid_flow_update['flow_list']
@@ -129,7 +129,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
         dvar_name.append('f' + str(curr_edge))
         dvar_name.append('f' + str(curr_edge[::-1])) # the directed edge (other way around)
         dvar_lb += [0,0]
-        dvar_ub += [G.edge[curr_edge[0]][curr_edge[1]]['capacity']*10**5]*2 # CHANGE HERE! - If you want to enable/disable capacities for edges. To disable capacities multiplie curr_edge[1]]['capacity'] by a factor, i.e., *10**3
+        dvar_ub += [G.edge[curr_edge[0]][curr_edge[1]]['capacity']*10**5 + 1e5]*2 # CHANGE HERE! - If you want to enable/disable capacities for edges. To disable capacities multiplie curr_edge[1]]['capacity'] by a factor, i.e., *10**3
         dvar_type += ['C', 'C']
         dvar_obj_coef += [0, 0]
         dvar_pos[('f', curr_edge)] = counter
