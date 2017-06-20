@@ -33,8 +33,8 @@ def update_grid(G, failed_edges):
     Modifies the graph G (a networkx object, with custom fields 'demand', 'gen_cap' and 'generated')
     """
     # First step, go over failed edges and omit them from G
-    for edge in failed_edges:
-        G.remove_edge(edge[0], edge[1])
+    G.remove_edges_from([edge for edge in failed_edges])
+
     # Now adjust the total demand (supply) to equal the total supply (demand) within each connected component of G
     graphs = list(nx.connected_component_subgraphs(G))
     #print 'Total number of components is', len(graphs)
@@ -90,7 +90,7 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     i = 0
     while F[i]:  # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
-        lpfilename = "c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disable later on.
+        lpfilename = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disable later on.
         tmp_grid_flow_update = grid_flow_update(G, F[i], lpfilename, False, True) # true for returning the cplex object - will enable us to retrive flow variabels
         F[i+1] =  tmp_grid_flow_update['failed_edges'] # lines 3-5 in algorithm - find new set of edge failures. Modified method for flow solution - using cplex engine.
         flowsteps[i] = tmp_grid_flow_update['flow_list']
@@ -112,79 +112,46 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     Adi, 31/07/2016.
     """
 
-    # First step, go over failed edges and omit them from G
-    G.remove_edges_from(failed_edges)
+    # First step, go over failed edges and omit them from G, rebalance components with demand and generation
+    update_grid(G, init_fail_edges) # Each component of G will balance demand and generation capacities after this line
+
+    # Initialize cplex internal flow problem
+    find_flow = cplex.Cplex() # create cplex instance
+    find_flow.objective.set_sense(find_flow.objective.sense.minimize) # doesn't matter
 
     # Initialize decision variables (demand, supply, theta, and flow)
-    dvar_name = [] # name of variable
-    dvar_type = [] # type of variable
-    dvar_obj_coef = [] # objective function coefficient
-    dvar_lb = [] # lower bound
-    dvar_ub = [] # upper bound
-    dvar_pos = dict() # position of variable
+    dvar_pos_flow = dict() # position of variable
     counter = 0
 
-    # define flow variables (continuous non-negative)
-    for curr_edge in G.edges():
-        dvar_name.append('f' + str(curr_edge))
-        dvar_name.append('f' + str(curr_edge[::-1])) # the directed edge (other way around)
-        dvar_lb += [0,0]
-        dvar_ub += [G.edge[curr_edge[0]][curr_edge[1]]['capacity']*10**5 + 1e5]*2 # CHANGE HERE! - If you want to enable/disable capacities for edges. To disable capacities multiplie curr_edge[1]]['capacity'] by a factor, i.e., *10**3
-        dvar_type += ['C', 'C']
-        dvar_obj_coef += [0, 0]
-        dvar_pos[('f', curr_edge)] = counter
-        dvar_pos[('f', curr_edge[::-1])] = counter + 1
-        counter += 2
+    # define flow variables (continuous unbounded)
+    obj = [0]*len(G.edges())
+    types = 'C'*len(G.edges())
+    lb = [-1e20]*len(G.edges())
+    ub = [1e20]*len(G.edges())
+    names = ['f' + str(curr_edge) for curr_edge in G.edges()]
+    dvar_pos_flow.update({('f', G.edges()[i]):i+counter for i in range(len(G.edges()))})
+    find_flow.variables.add(obj = obj, types = types, lb = lb, ub = ub, names = names)
+    counter += len(dvar_pos_flow)
 
-    # define unsupplied demand, generation, and theta variables (continuous, non-negative)
-    for curr_node in G.nodes():
-        # unsupplied demand variable
-        dvar_name.append('ud' + str(curr_node))
-        dvar_obj_coef += [G.node[curr_node]['un_sup_cost']]
-        dvar_type += 'C'
-        dvar_pos[('ud', curr_node)] = counter
-        dvar_lb += [0]
-        dvar_ub += [10**4] # [G.node[curr_node]['original_demand']] # no need for an unsupplied demand upper bound - also made some problems
-        counter += 1
-        # theta variable
-        dvar_name.append('theta' + str(curr_node))
-        dvar_obj_coef += [0]
-        dvar_type += 'C'
-        dvar_pos[('theta', curr_node)] = counter
-        dvar_lb += [-10**6] # no need for a theta lower bound
-        dvar_ub += [10**6] # no need for a theta upper bound
-        counter += 1
-        # generation variables (continouous non-negative)
-        if G.node[curr_node]['gen_cap'] > 0:
-            dvar_name.append('g' + str(curr_node))
-            dvar_obj_coef += [G.node[curr_node]['gen_cost']]
-            dvar_type += 'C'
-            dvar_pos[('g', curr_node)] = counter
-            dvar_lb += [0]
-            dvar_ub += [G.node[curr_node]['gen_cap']]
-            counter += 1
+    # define theta variables (continouous unbounded)
+    names = ['theta' + str(curr_node) for curr_node in G.nodes()]
+    dvar_pos_flow.update({('theta', G.nodes()[i]):i+counter for i in range(len(G.nodes()))})
+    find_flow.variables.add(obj = obj, types = types, lb = lb, ub = ub, names = names)
 
-    # Initialize cplex engine
-    find_flow = cplex.Cplex() # create cplex instance
-    find_flow.objective.set_sense(find_flow.objective.sense.minimize) # minimize costs
-    find_flow.variables.add(obj = dvar_obj_coef, lb = dvar_lb, ub = dvar_ub, types = dvar_type, names = dvar_name) # define variables and objective function
-
-    # Add theta-flow constraints: theta_i-theta_j-x_{ij}f_{ij} = 0
-    for curr_edge in G.edges():
-        theta_lhs = [dvar_pos[('theta', curr_edge[0])], dvar_pos[('theta', curr_edge[1])], dvar_pos[('f', curr_edge)], dvar_pos[('f', curr_edge[::-1])]]
-        theta_lhs_coef = [1, -1, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance'], G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]
-        find_flow.linear_constraints.add(lin_expr = [[theta_lhs, theta_lhs_coef]], senses = "E", rhs = [0])
+    # Add phase angle (theta) flow constraints: theta_i-theta_j-x_{ij}f_{ij} = 0
+    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('f', curr_edge)]], [1, -1, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]] for curr_edge in G.edges()]
+    find_flow.linear_constraints.add(lin_expr = phase_constraints, senses = "E"*len(phase_constraints), rhs = [0]*len(phase_constraints))
 
     # Add general flow constraints
     for node in G.nodes():
         assoc_edges = get_associated_edges(node, G.edges())
         # formation is: incoming edges - outgoing edges + generation
-        flow_lhs = [dvar_pos[('f', edge)] for edge in assoc_edges['in']] + [dvar_pos[('f', edge)] for edge in assoc_edges['out']]
+        flow_lhs = [dvar_pos_flow[('f', edge)] for edge in assoc_edges['in']] + [dvar_pos_flow[('f', edge)] for edge in assoc_edges['out']]
         flow_lhs_coef = [1 for edge in assoc_edges['in']] + [-1 for edge in assoc_edges['out']]
-        flow_lhs += [dvar_pos[('ud', node)]]
+        flow_lhs += [dvar_pos_flow[('ud', node)]]
         flow_lhs_coef += [1]
         if G.node[node]['gen_cap'] > 0:
-            flow_lhs += [dvar_pos[('g', node)]]
+            flow_lhs += [dvar_pos_flow[('g', node)]]
             flow_lhs_coef += [1]
         find_flow.linear_constraints.add(lin_expr = [[flow_lhs, flow_lhs_coef]], senses = "E", rhs = [G.node[node]['original_demand']])
 
@@ -207,19 +174,19 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     find_flow_vars = find_flow.solution.get_values()
     # Set the generation and demand
     for curr_node in G.nodes():
-        G.node[curr_node]['demand'] = G.node[curr_node]['original_demand'] - find_flow_vars[dvar_pos[('ud', curr_node)]]
+        G.node[curr_node]['demand'] = G.node[curr_node]['original_demand'] - find_flow_vars[dvar_pos_flow[('ud', curr_node)]]
         if G.node[curr_node]['gen_cap'] > 0:
-            G.node[curr_node]['generated'] = find_flow_vars[dvar_pos[('g', curr_node)]]
+            G.node[curr_node]['generated'] = find_flow_vars[dvar_pos_flow[('g', curr_node)]]
 
     # Set the failed edges
     new_failed_edges = []
     flow_list = []
     for curr_edge in G.edges():
-        if (find_flow_vars[dvar_pos[('f', curr_edge)]] > G.edge[curr_edge[0]][curr_edge[1]]['capacity']) or \
-        (find_flow_vars[dvar_pos[('f', curr_edge[::-1])]] > G.edge[curr_edge[0]][curr_edge[1]]['capacity']):
+        if (find_flow_vars[dvar_pos_flow[('f', curr_edge)]] > G.edge[curr_edge[0]][curr_edge[1]]['capacity']) or \
+        (find_flow_vars[dvar_pos_flow[('f', curr_edge[::-1])]] > G.edge[curr_edge[0]][curr_edge[1]]['capacity']):
             new_failed_edges += [curr_edge]
-        flow_list += [[curr_edge[0], curr_edge[1], find_flow_vars[dvar_pos[('f', curr_edge)]]]]
-        flow_list += [[curr_edge[1], curr_edge[0], find_flow_vars[dvar_pos[('f', curr_edge[::-1])]]]]
+        flow_list += [[curr_edge[0], curr_edge[1], find_flow_vars[dvar_pos_flow[('f', curr_edge)]]]]
+        flow_list += [[curr_edge[1], curr_edge[0], find_flow_vars[dvar_pos_flow[('f', curr_edge[::-1])]]]]
 
     # print 'failed_edges:', new_failed_edges, '(*should always be an empty set)'
     # just in case you want an lp file - for debugging purposes.
