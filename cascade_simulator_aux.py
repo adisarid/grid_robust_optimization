@@ -103,13 +103,12 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     return({'F': F, 't':i, 'flowsteps': flowsteps})
 
 
-def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object = False, return_flow_list = False):
+def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object = False):
     """
     The following function modifies G after failure of edges in failed_edges,
     After which the function re-computes the flows, demand, and supply using CPLEX engine
     Eventually, the function returns a set of new failed edges.
-    This function replaces the previous update_grid and compute_flow
-    Adi, 31/07/2016.
+    Adi, 21/06/2017.
     """
 
     # First step, go over failed edges and omit them from G, rebalance components with demand and generation
@@ -128,33 +127,29 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     types = 'C'*len(G.edges())
     lb = [-1e20]*len(G.edges())
     ub = [1e20]*len(G.edges())
-    names = ['f' + str(curr_edge) for curr_edge in G.edges()]
-    dvar_pos_flow.update({('f', G.edges()[i]):i+counter for i in range(len(G.edges()))})
+    names = ['f' + str(curr_edge) for curr_edge in sorted_edges(G.edges())]
+    dvar_pos_flow.update({('f', tuple(sorted(G.edges()[i]))):i+counter for i in range(len(G.edges()))})
     find_flow.variables.add(obj = obj, types = types, lb = lb, ub = ub, names = names)
     counter += len(dvar_pos_flow)
 
     # define theta variables (continouous unbounded)
     names = ['theta' + str(curr_node) for curr_node in G.nodes()]
+    num_nodes = len(G.nodes())
     dvar_pos_flow.update({('theta', G.nodes()[i]):i+counter for i in range(len(G.nodes()))})
-    find_flow.variables.add(obj = obj, types = types, lb = lb, ub = ub, names = names)
+    find_flow.variables.add(obj = [0]*num_nodes, types = 'C'*num_nodes, lb = [-1e20]*num_nodes, ub = [1e20]*num_nodes, names = names)
 
     # Add phase angle (theta) flow constraints: theta_i-theta_j-x_{ij}f_{ij} = 0
-    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('f', curr_edge)]], [1, -1, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]] for curr_edge in G.edges()]
+    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('f', curr_edge)]], [1.0, -1.0, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]] for curr_edge in sorted_edges(G.edges())]
     find_flow.linear_constraints.add(lin_expr = phase_constraints, senses = "E"*len(phase_constraints), rhs = [0]*len(phase_constraints))
 
-    # Add general flow constraints
-    for node in G.nodes():
-        assoc_edges = get_associated_edges(node, G.edges())
-        # formation is: incoming edges - outgoing edges + generation
-        flow_lhs = [dvar_pos_flow[('f', edge)] for edge in assoc_edges['in']] + [dvar_pos_flow[('f', edge)] for edge in assoc_edges['out']]
-        flow_lhs_coef = [1 for edge in assoc_edges['in']] + [-1 for edge in assoc_edges['out']]
-        flow_lhs += [dvar_pos_flow[('ud', node)]]
-        flow_lhs_coef += [1]
-        if G.node[node]['gen_cap'] > 0:
-            flow_lhs += [dvar_pos_flow[('g', node)]]
-            flow_lhs_coef += [1]
-        find_flow.linear_constraints.add(lin_expr = [[flow_lhs, flow_lhs_coef]], senses = "E", rhs = [G.node[node]['original_demand']])
-
+    # Add general flow constraints. formation is: incoming edges - outgoing edges + generation
+    flow_conservation = [[[dvar_pos_flow[('f', edge)] for edge in get_associated_edges(node, G.edges())['in']] + [dvar_pos_flow[('f', edge)] for edge in get_associated_edges(node, G.edges())['out']], \
+                          [1 for edge in get_associated_edges(node, G.edges())['in']] + [-1 for edge in get_associated_edges(node, G.edges())['out']]] for node in G.nodes()]
+    flow_conservation_rhs = [G.node[curr_node]['demand']-G.node[curr_node]['generated'] for curr_node in G.nodes()]
+    # clean up a bit for "empty" constraints
+    flow_conservation_rhs = [flow_conservation_rhs[i] for i in range(len(flow_conservation_rhs)) if flow_conservation[i] != [[],[]]]
+    flow_conservation = [const for const in flow_conservation if const != [[],[]]]
+    find_flow.linear_constraints.add(lin_expr=flow_conservation, senses = "E"*len(flow_conservation), rhs = flow_conservation_rhs)
 
     # Suppress cplex messages
     find_flow.set_log_stream(None)
@@ -166,29 +161,16 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     find_flow.set_problem_type(find_flow.problem_type.LP) # This is a regular linear problem, avoid code 1017 error.
     find_flow.solve()
 
-    # Check to make sure that an optimal solution has been reached or exit outherwise
+    # Check to make sure that an optimal solution has been reached or exit otherwise
     if find_flow.solution.get_status() != 1:
         find_flow.write('problem_infeasible.lp')
         sys.exit('Error: no optimal solution found while trying to solve flow problem. Writing into: problem_infeasible.lp')
 
     find_flow_vars = find_flow.solution.get_values()
-    # Set the generation and demand
-    for curr_node in G.nodes():
-        G.node[curr_node]['demand'] = G.node[curr_node]['original_demand'] - find_flow_vars[dvar_pos_flow[('ud', curr_node)]]
-        if G.node[curr_node]['gen_cap'] > 0:
-            G.node[curr_node]['generated'] = find_flow_vars[dvar_pos_flow[('g', curr_node)]]
 
     # Set the failed edges
-    new_failed_edges = []
-    flow_list = []
-    for curr_edge in G.edges():
-        if (find_flow_vars[dvar_pos_flow[('f', curr_edge)]] > G.edge[curr_edge[0]][curr_edge[1]]['capacity']) or \
-        (find_flow_vars[dvar_pos_flow[('f', curr_edge[::-1])]] > G.edge[curr_edge[0]][curr_edge[1]]['capacity']):
-            new_failed_edges += [curr_edge]
-        flow_list += [[curr_edge[0], curr_edge[1], find_flow_vars[dvar_pos_flow[('f', curr_edge)]]]]
-        flow_list += [[curr_edge[1], curr_edge[0], find_flow_vars[dvar_pos_flow[('f', curr_edge[::-1])]]]]
+    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if find_flow_vars[dvar_pos_flow[('f', edge)]] > G.edge[edge[0]][edge[1]]['capacity']]
 
-    # print 'failed_edges:', new_failed_edges, '(*should always be an empty set)'
     # just in case you want an lp file - for debugging purposes.
 
     if write_lp:
@@ -199,12 +181,6 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     # Should I return the CPLEX object?
     if return_cplex_object:
         return_object['cplex_object'] = find_flow
-    # Should I return a list with the flow variables
-    if return_flow_list:
-        flow_list = [flow_list[i] for i in range(len(flow_list)) if flow_list[i][2] > 0.0001] # filter to only positive flow
-        flow_dict = {tuple(i[0:2]) : i[2] for i in flow_list}
-        return_object['flow_list'] = flow_list # I'm still leaving this for backwards compatability with function cfe. Consider revising later on (modify function cfe)
-        return_object['flow_dict'] = flow_dict
 
     # Return output and exit function
     return(return_object)
@@ -216,12 +192,21 @@ def get_associated_edges(node, edges):
     Get the associated edges leaving and coming into a specified (input) node
     Output is a dictionary with 'in' being the set of all incoming edges and 'out' the set of all outgoing edges
     '''
-    out_edge = [key for key in edges if node == key[0]] # use the dictionary to identify outgoing edges
-    in_edge = [key for key in edges if node == key[1]] # use the dictionary to identify incoming edges
-    all_out = out_edge + [edge[::-1] for edge in in_edge] # all outgoing (needed since dictionary keys are always ordered tuples)
-    all_in = in_edge + [edge[::-1] for edge in out_edge] # all incoming
-    out_dict = {'out': all_out, 'in': all_in}
+    edges_ordered = [tuple(sorted(edge)) for edge in edges]
+    out_edge = [key for key in edges_ordered if node == key[0]] # use the dictionary to identify outgoing edges
+    in_edge = [key for key in edges_ordered if node == key[1]] # use the dictionary to identify incoming edges
+    out_dict = {'out': out_edge, 'in': in_edge}
     return(out_dict)
+
+
+def sorted_edges(edges_list):
+    """
+    Gets a list of tuples (unsorted) and returns the same list of tuples only
+    tuple pairs are sorted, i.e.:
+    sorted_edges([(1,2), (10,6)]) = [(1,2), (6,10)]
+    """
+    sorted_edges_list = [tuple(sorted(i)) for i in edges_list]
+    return(sorted_edges_list)
 
 
 
