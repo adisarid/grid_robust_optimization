@@ -83,19 +83,20 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     F[0] = init_fail_edges
 
     # initialize flow dictionary for high resolution of solution (output of flow at each step)
-    flowsteps = dict()
+    tot_failed = []
     # initialize flow
     #current_flow = compute_flow(G)
     # loop
     i = 0
     while F[i]:  # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
-        lpfilename = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disable later on.
-        tmp_grid_flow_update = grid_flow_update(G, F[i], lpfilename, False) # true for returning the cplex object - will enable us to retrive flow variabels
-        F[i+1] =  tmp_grid_flow_update['failed_edges'] # lines 3-5 in algorithm - find new set of edge failures. Modified method for flow solution - using cplex engine.
+        #lpfilename = "c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disable later on.
+        tmp_grid_flow_update = grid_flow_update(G, F[i], False, False)
+        F[i+1] =  tmp_grid_flow_update['failed_edges']
+        tot_failed += F[i+1]
         i += 1
 
-    return({'F': F, 't':i})
+    return({'F': F, 't':i, 'all_failed': tot_failed})
 
 
 def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object = False):
@@ -107,7 +108,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     """
 
     # First step, go over failed edges and omit them from G, rebalance components with demand and generation
-    update_grid(G, init_fail_edges) # Each component of G will balance demand and generation capacities after this line
+    update_grid(G, failed_edges) # Each component of G will balance demand and generation capacities after this line
 
     # Initialize cplex internal flow problem
     find_flow = cplex.Cplex() # create cplex instance
