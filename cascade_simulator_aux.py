@@ -169,7 +169,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     find_flow_vars = find_flow.solution.get_values()
 
     # Set the failed edges
-    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if find_flow_vars[dvar_pos_flow[('f', edge)]] > G.edge[edge[0]][edge[1]]['capacity']]
+    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if abs(find_flow_vars[dvar_pos_flow[('f', edge)]]) > G.edge[edge[0]][edge[1]]['capacity']]
 
     # just in case you want an lp file - for debugging purposes.
 
