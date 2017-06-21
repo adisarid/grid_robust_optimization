@@ -91,16 +91,11 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     while F[i]:  # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
         lpfilename = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disable later on.
-        tmp_grid_flow_update = grid_flow_update(G, F[i], lpfilename, False, True) # true for returning the cplex object - will enable us to retrive flow variabels
+        tmp_grid_flow_update = grid_flow_update(G, F[i], lpfilename, False) # true for returning the cplex object - will enable us to retrive flow variabels
         F[i+1] =  tmp_grid_flow_update['failed_edges'] # lines 3-5 in algorithm - find new set of edge failures. Modified method for flow solution - using cplex engine.
-        flowsteps[i] = tmp_grid_flow_update['flow_list']
         i += 1
 
-    # Upon completion of simulation, write solution to file if requested
-    if write_solution_file:
-        write_sim_steps(write_solution_file, F, flowsteps)
-
-    return({'F': F, 't':i, 'flowsteps': flowsteps})
+    return({'F': F, 't':i})
 
 
 def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object = False):
