@@ -16,7 +16,7 @@ import cplex
 import sys
 import os
 import csv
-
+## os.chdir("c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\")
 # custom procedures
 from read_grid import * # read grid and parameters from csv file
 import build_problem # build the cplex problem object and set the lazy callback function
@@ -37,24 +37,21 @@ robust_opt_cplex.register_callback(build_problem.MyLazy) # register the lazy cal
 
 robust_opt_cplex.solve()
 
-current_solution = robust_opt_cplex.solution.get_values() # for debugging purposes
 
-##try:  # Exception handling just in case something goes wrong with the solver
-##
-##    robust_opt_cplex.solve()  #solve the model
-##    # solution.get_status() returns an integer code
-##    print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
-##    # the following line prints the corresponding status string
-##    print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
-##
-##    print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
-##    print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
-##
-##    # export the obtained solution to a file
-##    export_results.write_results(robust_opt_cplex)
-##
-##except CplexError, exc:
-##    print exc
+
+
+robust_opt_cplex.solve()  #solve the model
+print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
+# the following line prints the corresponding status string
+print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
+print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
+print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
+
+# export the obtained solution to a file
+current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value()]
+current_var_names = robust_opt_cplex.variables.get_names() + ['Objective']
+
+export_results.write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/temp_sol.csv')
 
 
 
