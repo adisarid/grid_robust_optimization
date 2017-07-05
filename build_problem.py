@@ -150,6 +150,11 @@ def build_cplex_problem():
 
             for cur_edge in assoc_edges['out']:
                 # using only outgoing edges incoming will be covered as "outgoing" at a different node
+                # First set failed edges according to input data
+                # DEBUG HERE 05/07/2017.
+                init_failures = []
+                init_failures_coef = [1,-1]
+
                 # Phase angle constraints -M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*F_ij
                 # Less than equal side
                 phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
