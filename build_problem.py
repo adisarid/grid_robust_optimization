@@ -182,16 +182,16 @@ def build_cplex_problem():
                     disable_flow_lhs_coef = [1, bigM]
                     robust_opt.linear_constraints.add(lin_expr = [[disable_flow_lhs, disable_flow_lhs_coef]], senses = "G", rhs = [0])
 
-                    # Don't use failed edges -M*(1-F_ij) <= f_ij <= M*(1-F_ij)
-                    # Less than equal side
-                    fail_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
-                    fail_lhs_coef = [1, bigM]
-                    robust_opt.linear_constraints.add(lin_expr = [[fail_lhs, fail_lhs_coef]], senses = "L", rhs = [bigM])
+                # Don't use failed edges -M*(1-F_ij) <= f_ij <= M*(1-F_ij)
+                # Less than equal side
+                fail_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
+                fail_lhs_coef = [1, bigM]
+                robust_opt.linear_constraints.add(lin_expr = [[fail_lhs, fail_lhs_coef]], senses = "L", rhs = [bigM])
 
-                    # Greater than equal side
-                    fail_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
-                    fail_lhs_coef = [1, -bigM]
-                    robust_opt.linear_constraints.add(lin_expr = [[fail_lhs, fail_lhs_coef]], senses = "G", rhs = [-bigM])
+                # Greater than equal side
+                fail_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
+                fail_lhs_coef = [1, -bigM]
+                robust_opt.linear_constraints.add(lin_expr = [[fail_lhs, fail_lhs_coef]], senses = "G", rhs = [-bigM])
 
             # Finished iterating over edges, continuing to iterate over scenarios, and nodes
             # Generation capacity g_i <= c0_i + cg_i
