@@ -9,6 +9,8 @@
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
+import csv
+
 def write_names_values(current_solution, variable_names, csvfilename):
     var_row = [[variable_names[i], current_solution[i]] for i in range(len(variable_names))]
     with open(csvfilename, 'wb') as csvfile:
