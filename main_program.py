@@ -51,7 +51,9 @@ print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(rob
 current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value()]
 current_var_names = robust_opt_cplex.variables.get_names() + ['Objective']
 
-export_results.write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/temp_sol.csv')
+from time import gmtime, strftime
+timestamp = strftime('%d-%m-%Y %H-%M-%S - ', gmtime())
+export_results.write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
 
 
 
