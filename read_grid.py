@@ -56,9 +56,9 @@ def read_scenarios(filename_fail, filename_pr):
         next(csv_reader) # assuimng header, skip first line
         for row in csv_reader:
             if ('s', row[0]) in dic.keys():
-                dic[('s', row[0])] += [(row[1], row[2])] # failures
+                dic[('s', row[0])] += [arrange_edge_minmax(row[1], row[2])] # failures
             else:
-                dic[('s', row[0])] = [(row[1], row[2])] # first failure in this scenario
+                dic[('s', row[0])] = [arrange_edge_minmax(row[1], row[2])] # first failure in this scenario
     return dic
 
 def read_additional_param(filename):
@@ -84,7 +84,12 @@ def build_nx_grid(nodes, edges):
                    susceptance = edges[('x',) + edge])
     return G
 
-def arrange_edge_minmax(edge_i, edge_j):
+
+def arrange_edge_minmax(edge_i, edge_j = []):
+    if edge_j == []:
+        # case edge_i contains a tuple
+        edge_j = edge_i[1]
+        edge_i = edge_i[0]
     tmp = (min(edge_i, edge_j), max(edge_i, edge_j))
     return tmp
 
