@@ -155,7 +155,7 @@ def build_cplex_problem():
                 if cur_edge in scenarios[('s', scenario)]:
                     init_failures = [dvar_pos[('F', cur_edge, scenario)]]
                     init_failures_coef = [1]
-                    robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "E", rhs = [1])
+                    robust_opt.linear_constraints.add(lin_expr = [[init_failures, init_failures_coef]], senses = "E", rhs = [1])
 
 
                 # Phase angle constraints -M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*F_ij
@@ -261,6 +261,7 @@ class MyLazy(LazyConstraintCallback):
         # *** Note that for the second line (the one with \epsilon) we have f_edge - C_edge if edge failed since any higher flow will also fail edge
         #     We have C_edge - f_edge if non-failed edge since every lower flow will also not fail edge (probably or surely? depending on cascade level?) ***
         # ALSO - Think about how to add constraints which deal with the capacity decisions of backup generators.
+        #print "DEBUG: inconsistent_failures['should_fail']", inconsistent_failures['should_fail']
         for cur_scenario in inconsistent_failures['should_fail'].keys():
             # the (f_edge - C_edge) * (+-1)
             f_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
@@ -291,6 +292,7 @@ class MyLazy(LazyConstraintCallback):
                 self.add(constraint = cplex.SparsePair(pos_list[i], coef_list[i]), sense = "L", rhs = rhs[i])
 
         # LHS <= Const(# elementes in LHS) + (1-F)
+        #print "DEBUG: inconsistent_failures['shouldnt_fail']", inconsistent_failures['shouldnt_fail']
         for cur_scenario in inconsistent_failures['shouldnt_fail'].keys():
             # the (f_edge - C_edge) * (+-1)
             f_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
