@@ -31,7 +31,7 @@ build_results = build_problem.build_cplex_problem()
 robust_opt_cplex = build_results['cplex_problem']
 dvar_pos = build_results['cplex_location_dictionary'] # useful for debugging
 
-robust_opt_cplex.write("c:/temp/tmp_robust_lp.lp")
+robust_opt_cplex.write("c:/temp/grid_cascade_output/tmp_robust_lp.lp")
 
 robust_opt_cplex.register_callback(build_problem.MyLazy) # register the lazy callback
 
@@ -48,8 +48,21 @@ print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
 print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
 
 # export the obtained solution to a file
+# compute total supply per scenario
 current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value()]
 current_var_names = robust_opt_cplex.variables.get_names() + ['Objective']
+
+tot_supply = [sum([current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+tot_unsupplied = [scenarios[cur_scenario]*sum([nodes[('d', wkey[1])]-current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+tot_supply_sce = ['supply_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+tot_supply_missed = ['un_supplied_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+
+# add some info to results
+current_solution = current_solution + tot_supply + tot_unsupplied
+current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
+
+print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
+
 
 from time import gmtime, strftime
 timestamp = strftime('%d-%m-%Y %H-%M-%S - ', gmtime())
