@@ -22,6 +22,7 @@ def compute_failed_inconsistent(nodes, edges, scenarios, current_solution, dvar_
     """
 
     init_grid = build_nx_grid(nodes, edges, current_solution, dvar_pos) # build initial grid
+    print "DEBUG: Feeding into cfe algorithm (compute_cascade.compute_failed_inconsistent()) - edges:", init_grid.edges()
     scenario_list = [cur_sce[1] for cur_sce in scenarios.keys() if cur_sce[0] == 's_pr'] # get scenario list
     end_game_failed = dict() # initialize edge failure dictionary
     end_game_failed = {cur_scenario: cascade_simulator_aux.cfe(init_grid.copy(), scenarios[('s', cur_scenario)], write_solution_file = False)['all_failed']  for cur_scenario in scenario_list}
@@ -34,7 +35,7 @@ def compute_failed_inconsistent(nodes, edges, scenarios, current_solution, dvar_
     # Edges which did not fail in current solution but should fail according to the simulation
     not_failed_should_fail = {cur_scenario: [edge for edge in not_failed_in_solution[cur_scenario] if edge[1] in end_game_failed[cur_scenario]] for cur_scenario in scenario_list}
     # Edges which failed in current solution but shouldn't fail according to the simulation
-    failed_shouldnt_fail = {cur_scenario: [edge for edge in failed_in_solution[cur_scenario] if edge[1] not in end_game_failed[cur_scenario]] for cur_scenario in scenario_list}
+    failed_shouldnt_fail = {cur_scenario: [edge for edge in failed_in_solution[cur_scenario] if edge[1] not in end_game_failed[cur_scenario] and (edge[1] not in scenarios[('s', cur_scenario)])] for cur_scenario in scenario_list}
 
     inconsistencies = {'should_fail': not_failed_should_fail, 'shouldnt_fail': failed_shouldnt_fail}
 
