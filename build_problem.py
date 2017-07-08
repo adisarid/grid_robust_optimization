@@ -13,12 +13,15 @@ import cplex # for building and interfacing with cplex api
 from cplex.callbacks import LazyConstraintCallback # import class for lazy callbacks
 import compute_cascade # needed for the lazy call backs algorithm
 from read_grid import nodes, edges, scenarios, params # using global variables for easy reading into lazy callback class
+from export_results import write_names_values # imported for writing callback information - debugging purpuses
+from time import gmtime, strftime # for placing timestamp on debug solution files
 
 epsilon = 1e-10
 bigM = 1.0/epsilon
 
 def build_cplex_problem():
     global dvar_pos # used as global to allow access across all functions
+    global dvar_name
 
     # initialize variable vector with variable name
     dvar_name = []
@@ -237,14 +240,18 @@ class MyLazy(LazyConstraintCallback):
     def __call__(self): # read current integer solution and add violated valid inequality.
         #print "I'm in the lazy call back!"
         global dvar_pos # position variable is global
+        global dvar_name # variable names for debugging
         global epsilon
         global bigM
-        cur_row = []
+
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
         current_solution = self.get_values()
 
-        # build new grid based on solution and return the inconsistent failrues
+        timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime())
+        write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_callback_solution.csv')
+
+        # build new grid based on solution and return the inconsistent failures
         inconsistent_failures = compute_cascade.compute_failed_inconsistent(nodes, edges, scenarios, current_solution, dvar_pos)
         # set the X variables
         X_established = [dvar_pos[xkey] for xkey in dvar_pos.keys() if xkey[0] == 'X_' and current_solution[dvar_pos[xkey]] > 0.999]
@@ -261,17 +268,17 @@ class MyLazy(LazyConstraintCallback):
         # *** Note that for the second line (the one with \epsilon) we have f_edge - C_edge if edge failed since any higher flow will also fail edge
         #     We have C_edge - f_edge if non-failed edge since every lower flow will also not fail edge (probably or surely? depending on cascade level?) ***
         # ALSO - Think about how to add constraints which deal with the capacity decisions of backup generators.
-        #print "DEBUG: inconsistent_failures['should_fail']", inconsistent_failures['should_fail']
+        print timestampstr, "DEBUG: inconsistent_failures['should_fail']", inconsistent_failures['should_fail']
         for cur_scenario in inconsistent_failures['should_fail'].keys():
             # the (f_edge - C_edge) * (+-1)
             f_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             f_not_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
-            f_failed_coef = [1]*len(f_failed)
-            f_not_failed_coef = [-1]*len(f_not_failed)
+            f_failed_coef = [epsilon]*len(f_failed)
+            f_not_failed_coef = [-epsilon]*len(f_not_failed)
             C_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             C_not_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
-            C_failed_coef = [-1]*len(f_not_failed)
-            C_not_failed_coef = [1]*len(f_failed)
+            C_failed_coef = [-epsilon]*len(f_not_failed)
+            C_not_failed_coef = [epsilon]*len(f_failed)
             C_const = [epsilon*edges[('c',)+ fkey[1]] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999] +\
                 [-epsilon*edges[('c',)+ fkey[1]] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
             # the F_edge(s)
@@ -289,20 +296,22 @@ class MyLazy(LazyConstraintCallback):
 
             # Adding lazy constraints one by one - currently don't know how to do this in batch
             for i in xrange(len(pos_list)):
+                curr_cut_debug = [str(coef_list[i][j]) + '*' + dvar_name[pos_list[i][j]] for j in xrange(len(pos_list[i]))]
+                print timestampstr, "Adding cut (didn't but should've failed)", curr_cut_debug, "<=", rhs[i]
                 self.add(constraint = cplex.SparsePair(pos_list[i], coef_list[i]), sense = "L", rhs = rhs[i])
 
         # LHS <= Const(# elementes in LHS) + (1-F)
-        #print "DEBUG: inconsistent_failures['shouldnt_fail']", inconsistent_failures['shouldnt_fail']
+        print timestampstr, "DEBUG: inconsistent_failures['shouldnt_fail']", inconsistent_failures['shouldnt_fail']
         for cur_scenario in inconsistent_failures['shouldnt_fail'].keys():
             # the (f_edge - C_edge) * (+-1)
             f_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             f_not_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
-            f_failed_coef = [1]*len(f_failed)
-            f_not_failed_coef = [-1]*len(f_not_failed)
+            f_failed_coef = [epsilon]*len(f_failed)
+            f_not_failed_coef = [-epsilon]*len(f_not_failed)
             C_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             C_not_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
-            C_failed_coef = [-1]*len(f_not_failed)
-            C_not_failed_coef = [1]*len(f_failed)
+            C_failed_coef = [-epsilon]*len(f_not_failed)
+            C_not_failed_coef = [epsilon]*len(f_failed)
             C_const = [epsilon*edges[('c',)+ fkey[1]] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999] +\
                 [-epsilon*edges[('c',)+ fkey[1]] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
             # the F_edge(s)
@@ -321,6 +330,8 @@ class MyLazy(LazyConstraintCallback):
 
             # Adding lazy constraints one by one - currently don't know how to do this in batch
             for i in xrange(len(pos_list)):
+                curr_cut_debug = [str(coef_list[i][j]) + '*' + dvar_name[pos_list[i][j]] for j in xrange(len(pos_list[i]))]
+                print timestampstr, "Adding cut (failed but shouldn't)", curr_cut_debug, "<=", rhs[i]
                 self.add(constraint = cplex.SparsePair(pos_list[i], coef_list[i]), sense = "L", rhs = rhs[i])
 
 

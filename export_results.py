@@ -12,7 +12,10 @@
 import csv
 
 def write_names_values(current_solution, variable_names, csvfilename):
+    #if variable_names != []:
     var_row = [[variable_names[i], current_solution[i]] for i in range(len(variable_names))]
+    #else:
+    #    var_row = current_solution
     with open(csvfilename, 'wb') as csvfile:
         solutionwriter = csv.writer(csvfile, delimiter = ',')
         solutionwriter.writerow(['name', 'value'])

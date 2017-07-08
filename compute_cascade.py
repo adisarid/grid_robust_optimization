@@ -68,7 +68,7 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime())
     print timestampstr, "Currently inside compute_cascade.build_nx_grid(). Adding edges:", add_edges
     # Check if X are installed here
-    installed_edges = {('X_', cur_edge): current_solution[dvar_pos[('X_', cur_edge)]> 0.01] for cur_edge in edge_list}
+    # installed_edges = {('X_', cur_edge): current_solution[dvar_pos[('X_', cur_edge)]> 0.01] for cur_edge in edge_list}
 
     G.add_edges_from(add_edges)
 
