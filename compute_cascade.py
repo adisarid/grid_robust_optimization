@@ -11,7 +11,7 @@
 
 import networkx as nx
 import cascade_simulator_aux # for computing the cascades
-from time import gmtime, strftime # for placing timestamp on debug solution files
+from time import gmtime, strftime, clock # for placing timestamp on debug solution files
 
 def compute_failed_inconsistent(nodes, edges, scenarios, current_solution, dvar_pos):
     """
@@ -65,7 +65,7 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     add_edges = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]], 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0 or current_solution[dvar_pos[('X_', cur_edge)]]> 0.01)]
 
     # Debugging
-    timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime())
+    timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime()) + str(round(clock(), 3)) + ' - '
     print timestampstr, "Currently inside compute_cascade.build_nx_grid(). Adding edges:", add_edges
     # Check if X are installed here
     # installed_edges = {('X_', cur_edge): current_solution[dvar_pos[('X_', cur_edge)]> 0.01] for cur_edge in edge_list}
