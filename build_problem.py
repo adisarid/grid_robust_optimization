@@ -14,7 +14,8 @@ from cplex.callbacks import LazyConstraintCallback # import class for lazy callb
 import compute_cascade # needed for the lazy call backs algorithm
 from read_grid import nodes, edges, scenarios, params # using global variables for easy reading into lazy callback class
 from export_results import write_names_values # imported for writing callback information - debugging purpuses
-from time import gmtime, strftime # for placing timestamp on debug solution files
+from time import gmtime, strftime, clock # for placing timestamp on debug solution files
+from numpy import sign
 
 epsilon = 1e-10
 bigM = 1.0/epsilon
@@ -248,7 +249,7 @@ class MyLazy(LazyConstraintCallback):
 
         current_solution = self.get_values()
 
-        timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime())
+        timestampstr = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
         write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_callback_solution.csv')
 
         # build new grid based on solution and return the inconsistent failures
@@ -266,15 +267,17 @@ class MyLazy(LazyConstraintCallback):
         # \epsilon*(\sum_{failed edge}(f_edge - C_edge) + \sum_{non failed edge}(C_edge - f_edge)) <=
         #    Const(# elements in LHS) + F
         # *** Note that for the second line (the one with \epsilon) we have f_edge - C_edge if edge failed since any higher flow will also fail edge
-        #     We have C_edge - f_edge if non-failed edge since every lower flow will also not fail edge (probably or surely? depending on cascade level?) ***
+        #     We have C_edge - f_edge if non-failed edge since every lower flow will most likely not fail the edge (but not surely - this depends on cascade level) ***
+        # BUG FOUND HERE: In cases the flow is negative, there should be a (-) sign since the interesting size is (abs(f)-C) and not (f-C).
         # ALSO - Think about how to add constraints which deal with the capacity decisions of backup generators.
         print timestampstr, "DEBUG: inconsistent_failures['should_fail']", inconsistent_failures['should_fail']
         for cur_scenario in inconsistent_failures['should_fail'].keys():
             # the (f_edge - C_edge) * (+-1)
             f_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             f_not_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
-            f_failed_coef = [epsilon]*len(f_failed)
-            f_not_failed_coef = [-epsilon]*len(f_not_failed)
+            # FIXED BUG HERE DO THE SAME FOR NON FAIL INCONSISTENCIES
+            f_failed_coef = [epsilon*sign(current_solution[dvar_pos[fkey]]) for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
+            f_not_failed_coef = [-epsilon*sign(current_solution[dvar_pos[fkey]]) for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
             C_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             C_not_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
             C_failed_coef = [-epsilon]*len(f_not_failed)
@@ -315,7 +318,7 @@ class MyLazy(LazyConstraintCallback):
             C_const = [epsilon*edges[('c',)+ fkey[1]] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999] +\
                 [-epsilon*edges[('c',)+ fkey[1]] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
             # the F_edge(s)
-            F_should_fail = [dvar_pos[Fkey] for Fkey in inconsistent_failures['should_fail'][cur_scenario]]
+            F_should_fail = [dvar_pos[Fkey] for Fkey in inconsistent_failures['shouldnt_fail'][cur_scenario]]
             F_should_fail_coef = [1]*len(F_should_fail)
 
             # the constants
