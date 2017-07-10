@@ -25,8 +25,8 @@ import export_results # export solution results into csv file for later handling
 # using global variables for easy reading into lazy callback class
 from read_grid import nodes, edges, scenarios, params
 
-from time import gmtime, strftime
-timestamp = strftime('%d-%m-%Y %H-%M-%S - ', gmtime())
+from time import gmtime, strftime, clock
+timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
 
 # DEBUG PURPOSES:
 import sys # for directing print output to a file instead of writing to screen
@@ -72,7 +72,7 @@ current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
 
 print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
 
-
+timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
 export_results.write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
 
 
