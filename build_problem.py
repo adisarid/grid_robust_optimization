@@ -15,7 +15,6 @@ import compute_cascade # needed for the lazy call backs algorithm
 from read_grid import nodes, edges, scenarios, params # using global variables for easy reading into lazy callback class
 from export_results import write_names_values # imported for writing callback information - debugging purpuses
 from time import gmtime, strftime, clock # for placing timestamp on debug solution files
-from numpy import sign
 
 epsilon = 1e-10
 bigM = 1.0/epsilon
@@ -275,9 +274,8 @@ class MyLazy(LazyConstraintCallback):
             # the (f_edge - C_edge) * (+-1)
             f_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             f_not_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
-            # FIXED BUG HERE DO THE SAME FOR NON FAIL INCONSISTENCIES
-            f_failed_coef = [epsilon*sign(current_solution[dvar_pos[fkey]]) for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
-            f_not_failed_coef = [-epsilon*sign(current_solution[dvar_pos[fkey]]) for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
+            f_failed_coef = [epsilon*sign_n0(current_solution[dvar_pos[fkey]]) for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
+            f_not_failed_coef = [-epsilon*sign_n0(current_solution[dvar_pos[fkey]]) for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
             C_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             C_not_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
             C_failed_coef = [-epsilon]*len(f_not_failed)
@@ -309,8 +307,8 @@ class MyLazy(LazyConstraintCallback):
             # the (f_edge - C_edge) * (+-1)
             f_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             f_not_failed = [dvar_pos[fkey] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
-            f_failed_coef = [epsilon]*len(f_failed)
-            f_not_failed_coef = [-epsilon]*len(f_not_failed)
+            f_failed_coef = [epsilon*sign_n0(current_solution[dvar_pos[fkey]]) for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
+            f_not_failed_coef = [-epsilon*sign_n0(current_solution[dvar_pos[fkey]]) for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
             C_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] > 0.999]
             C_not_failed = [dvar_pos[('c', fkey[1])] for fkey in dvar_pos.keys() if fkey[0] == 'f' and fkey[len(fkey)-1] == cur_scenario and current_solution[dvar_pos[('F', fkey[1], cur_scenario)]] < 0.001]
             C_failed_coef = [-epsilon]*len(f_not_failed)
@@ -347,3 +345,10 @@ def get_associated_edges(node, all_edges):
     associated_dic['in'] = all_incoming
     associated_dic['out'] = all_outgoing
     return(associated_dic)
+
+
+def sign_n0(number):
+    if number >=0:
+        return(1)
+    else:
+        return(-1)
