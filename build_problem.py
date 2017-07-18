@@ -253,7 +253,7 @@ class MyLazy(LazyConstraintCallback):
         timestampstr = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
         write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_callback_solution.csv')
 
-        cfe_constraints = build_cfe_constraints(current_solution, simulation_failures)
+        cfe_constraints = build_cfe_constraints(current_solution)
 
         # Adding lazy constraints one by one - currently don't know how to do this in batch
         for i in xrange(len(cfe_constraints['positions'])):
@@ -279,20 +279,37 @@ def build_cfe_constraints(current_solution):
 
     epsilon2 = 1e-5
 
+    # initialize position and coefficient lists
+    positions_list = []
+    coefficient_list = []
+    rhs_list = []
+
+
     # build new grid based on solution and return the inconsistent failures
     simulation_failures = compute_cascade.compute_failures(nodes, edges, scenarios, current_solution, dvar_pos)
 
     # set the X variables
-    X_established = [dvar_pos[xkey] for xkey in dvar_pos.keys() if xkey[0] == 'X_' and current_solution[dvar_pos[xkey]] > 0.999]
-    X_not_established = [dvar_pos[xkey] for xkey in dvar_pos.keys() if xkey[0] == 'X_' and current_solution[dvar_pos[xkey]] < 0.001]
+    X_established = [cur_pos for xkey, cur_pos in dvar_pos.iteritems() if xkey[0] == 'X_' and current_solution[dvar_pos[xkey]] > 0.999]
+    X_not_established = [cur_pos for xkey, cur_pos in dvar_pos.iteritems() if xkey[0] == 'X_' and current_solution[dvar_pos[xkey]] < 0.001]
     X_established_coef = [1]*len(X_established)
     X_not_established_coef = [-1]*len(X_not_established)
-    X_const = [-1]*len(X_not_established_coef)
 
-    for cur_scenario in simulation_failures.keys():
-        for cur_cascade_iter in simulation_failures[cur_scenario]['F'].keys():
-            # Would have to add here the previous step's failed edges into the constraint.
-            pass
+    for cur_scenario, failure_dict in simulation_failures.iteritems():
+        cur_cascade_iter = 1
+        prev_failures = [] # accumulate previous failures for use within the constraints
+        while failure_dict['F'][cur_cascade_iter] != []:
+            # as long as failure_dict['F'][step] contains failures - continue to add constraints
+            for curr_failed_edge in failure_dict['F'][cur_cascade_iter]: # <- convert later on to list comprehention
+                tmp_position = X_established + X_not_established + [dvar_pos[('F',failed_edge, cur_scenario)] for failed_edge in prev_failures] + [dvar_pos[('c', curr_failed_edge)]] + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
+                tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(prev_failures) + [-epsilon] + [-1]
+                temp_rhs = sum([1]*len(X_established)) + sum([1]*len(prev_failures)) - epsilon*abs(current_solution[dvar_pos[('f', curr_failed_edge, cur_scenario)]]) - epsilon2 + epsilon*edges[('c',) + curr_failed_edge]
+                positions_list += [tmp_position]
+                coefficient_list += [tmp_coeff]
+                rhs_list += [temp_rhs]
+            prev_failures += failure_dict['F'][cur_cascade_iter] # add to previous failures
+            cur_cascade_iter += 1
+
+    cfe_constraints = {'positions': positions_list, 'coefficients': coefficient_list, 'rhs': rhs_list}
 
     return(cfe_constraints)
 
