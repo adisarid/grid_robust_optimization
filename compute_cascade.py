@@ -13,13 +13,11 @@ import networkx as nx
 import cascade_simulator_aux # for computing the cascades
 from time import gmtime, strftime, clock # for placing timestamp on debug solution files
 
-def compute_failed_inconsistent(nodes, edges, scenarios, current_solution, dvar_pos):
+def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     """
     Function builds grid based on original grid and infrastructure decisions from dvar_pos
     Then the cfe algorithm is run to determine which edges should fail in each scenario
-    These are compared to the failed edges in dvar_pos
-    Inconsistencies are returned by the function
-    If no inconsistencies are found then the function returns an empty list
+    cfe results are returned by the function as a dictionary with scenario keys for later use.
     """
 
     init_grid = build_nx_grid(nodes, edges, current_solution, dvar_pos) # build initial grid
@@ -28,22 +26,8 @@ def compute_failed_inconsistent(nodes, edges, scenarios, current_solution, dvar_
     initial_failures_to_cfe = {cur_scenario: scenarios[('s', cur_scenario)] for cur_scenario in scenario_list}
 
     cfe_dict_results = {cur_scenario: cascade_simulator_aux.cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False) for cur_scenario in scenario_list}
-    end_game_failed = {cur_scenario: cfe_dict_results[cur_scenario]['all_failed']  for cur_scenario in scenario_list}
-    first_cascade_failures = {cur_scenario: cfe_dict_results[cur_scenario]['F'][1] for cur_scenario in scenario_list}
 
-    # Find inconsistencies of failures by end_game_failed versus current_solution
-    F_keys = [key for key in dvar_pos.keys() if key[0] == 'F']
-    failed_in_solution = {cur_scenario: [key for key in F_keys if current_solution[dvar_pos[key]] > 0.999 and key[2] == cur_scenario] for cur_scenario in scenario_list}
-    not_failed_in_solution = {cur_scenario: [key for key in F_keys if current_solution[dvar_pos[key]] < 0.001 and key[2] == cur_scenario] for cur_scenario in scenario_list}
-
-    # Edges which did not fail in current solution but should fail according to the simulation - only first cascade step
-    not_failed_should_fail = {cur_scenario: [edge for edge in not_failed_in_solution[cur_scenario] if edge[1] in initial_failures_to_cfe[cur_scenario]] for cur_scenario in scenario_list}
-    # Edges which failed in current solution but shouldn't fail according to the simulation
-    failed_shouldnt_fail = {cur_scenario: [edge for edge in failed_in_solution[cur_scenario] if edge[1] not in end_game_failed[cur_scenario] and (edge[1] not in scenarios[('s', cur_scenario)])] for cur_scenario in scenario_list}
-
-    inconsistencies = {'should_fail': not_failed_should_fail, 'shouldnt_fail': failed_shouldnt_fail}
-
-    return(inconsistencies)
+    return(cfe_dict_results)
 
 
 
