@@ -28,11 +28,15 @@ from read_grid import nodes, edges, scenarios, params
 from time import gmtime, strftime, clock
 timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
 
-# DEBUG PURPOSES:
-import sys # for directing print output to a file instead of writing to screen
-orig_stdout = sys.stdout
-f = open('c:/TEMP/grid_cascade_output/callback debug/' + timestamp + 'print_output.txt', 'w')
-sys.stdout = f
+# DEBUG PURPOSES - output to text file instead of screen:
+global print_debug
+print_debug = False
+
+if print_debug:
+    import sys # for directing print output to a file instead of writing to screen
+    orig_stdout = sys.stdout
+    f = open('c:/TEMP/grid_cascade_output/callback debug/' + timestamp + 'print_output.txt', 'w')
+    sys.stdout = f
 
 # build problem
 
@@ -40,14 +44,13 @@ build_results = build_problem.build_cplex_problem()
 robust_opt_cplex = build_results['cplex_problem']
 dvar_pos = build_results['cplex_location_dictionary'] # useful for debugging
 
-robust_opt_cplex.write("c:/temp/grid_cascade_output/tmp_robust_lp.lp")
+if print_debug:
+    robust_opt_cplex.write("c:/temp/grid_cascade_output/tmp_robust_lp.lp")
 
 robust_opt_cplex.register_callback(build_problem.MyLazy) # register the lazy callback
 
-robust_opt_cplex.solve()
-
-
-
+# DEBUG - forcing specific solution
+#robust_opt_cplex.linear_constraints.add(lin_expr = [[[48], [1]], [[70], [1]], [[77],[1]], [[69],[1]], [[62],[1]], [[55],[1]], [[47],[1]]], senses = "E"*7, rhs = [1, 1, 25, 20, 25, 25, 20])
 
 robust_opt_cplex.solve()  #solve the model
 print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
@@ -77,6 +80,7 @@ export_results.write_names_values(current_solution, current_var_names, 'c:/temp/
 
 
 # Cancel print to file (initiated for debug purposes).
-sys.stdout = orig_stdout
-f.close()
+if print_debug:
+    sys.stdout = orig_stdout
+    f.close()
 
