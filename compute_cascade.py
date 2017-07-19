@@ -19,9 +19,8 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     Then the cfe algorithm is run to determine which edges should fail in each scenario
     cfe results are returned by the function as a dictionary with scenario keys for later use.
     """
-
     init_grid = build_nx_grid(nodes, edges, current_solution, dvar_pos) # build initial grid
-    print "DEBUG: Feeding into cfe algorithm (compute_cascade.compute_failed_inconsistent()) - edges:", init_grid.edges()
+    #print "DEBUG: Feeding into cfe algorithm (compute_cascade.compute_failed_inconsistent()) - edges:", init_grid.edges()
     scenario_list = [cur_sce[1] for cur_sce in scenarios.keys() if cur_sce[0] == 's_pr'] # get scenario list
     initial_failures_to_cfe = {cur_scenario: scenarios[('s', cur_scenario)] for cur_scenario in scenario_list}
 
@@ -52,8 +51,8 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     add_edges = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]], 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0 or current_solution[dvar_pos[('X_', cur_edge)]]> 0.01)]
 
     # Debugging
-    timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime()) + str(round(clock(), 3)) + ' - '
-    print timestampstr, "Currently inside compute_cascade.build_nx_grid(). Adding edges:", add_edges
+    #timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime()) + str(round(clock(), 3)) + ' - '
+    #print timestampstr, "Currently inside compute_cascade.build_nx_grid(). Adding edges:", add_edges
     # Check if X are installed here
     # installed_edges = {('X_', cur_edge): current_solution[dvar_pos[('X_', cur_edge)]> 0.01] for cur_edge in edge_list}
 
