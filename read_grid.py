@@ -40,7 +40,7 @@ def read_edges(filename):
             dic[('c',) + cur_edge] = float(row[2]) # current capacity
             dic[('x',) + cur_edge] = float(row[3]) # susceptance
             dic[('H',) + cur_edge] = float(row[4]) # fixed cost
-            dic[('h',) + cur_edge] = float(row[4]) # variable cost
+            dic[('h',) + cur_edge] = float(row[5]) # variable cost
     return dic
 
 def read_scenarios(filename_fail, filename_pr):
