@@ -16,8 +16,9 @@ from read_grid import nodes, edges, scenarios, params # using global variables f
 from export_results import write_names_values # imported for writing callback information - debugging purpuses
 from time import gmtime, strftime, clock # for placing timestamp on debug solution files
 
-epsilon = 1e-10
+epsilon = 1e-3
 bigM = 1.0/epsilon
+print_debug = False
 
 def build_cplex_problem():
     global dvar_pos # used as global to allow access across all functions
@@ -243,23 +244,32 @@ class MyLazy(LazyConstraintCallback):
         global dvar_name # variable names for debugging
         global epsilon
         global bigM
+        global print_debug
 
-        epsilon2 = 1e-5
+        epsilon2 = 1e-15 # epsilon2 must be smaller than epsilon 1 !
 
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
         current_solution = self.get_values()
-
-        timestampstr = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
-        write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_callback_solution.csv')
+        if print_debug:
+            timestampstr = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
+            write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_callback_solution.csv')
 
         cfe_constraints = build_cfe_constraints(current_solution)
 
         # Adding lazy constraints one by one - currently don't know how to do this in batch
         for i in xrange(len(cfe_constraints['positions'])):
             curr_cut_debug = [str(cfe_constraints['coefficients'][i][j]) + '*' + dvar_name[cfe_constraints['positions'][i][j]] for j in xrange(len(cfe_constraints['positions'][i]))]
-            print timestampstr, "Adding cut (failed but shouldn't)", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
-            self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coef'][i]), sense = "L", rhs = cfe_constraints['rhs'][i])
+            self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i])
+            if print_debug:
+                print timestampstr, "Adding cut (should fail)        ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
+
+
+        # temporary debug for forcing specific solution:
+        #tmpdbg = [[[48], [1]], [[70], [1]], [[77],[1]], [[69],[1]], [[62],[1]], [[55],[1]], [[47],[1]], [[42],[1]]]
+        #tmpdbg_rhs = [1, 1, 25, 20, 25, 25, 20, 0]
+        #for i in xrange(len(tmpdbg)):
+        #    self.add(constraint = cplex.SparsePair(tmpdbg[i][0], tmpdbg[i][1]), sense = "E", rhs = tmpdbg_rhs[i])
 
 
 
@@ -302,7 +312,7 @@ def build_cfe_constraints(current_solution):
             for curr_failed_edge in failure_dict['F'][cur_cascade_iter]: # <- convert later on to list comprehention
                 tmp_position = X_established + X_not_established + [dvar_pos[('F',failed_edge, cur_scenario)] for failed_edge in prev_failures] + [dvar_pos[('c', curr_failed_edge)]] + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
                 tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(prev_failures) + [-epsilon] + [-1]
-                temp_rhs = sum([1]*len(X_established)) + sum([1]*len(prev_failures)) - epsilon*abs(current_solution[dvar_pos[('f', curr_failed_edge, cur_scenario)]]) - epsilon2 + epsilon*edges[('c',) + curr_failed_edge]
+                temp_rhs = sum([1]*len(X_established)) + sum([1]*len(prev_failures)) - epsilon*abs(current_solution[dvar_pos[('f', curr_failed_edge, cur_scenario)]]) - epsilon*epsilon + epsilon*edges[('c',) + curr_failed_edge]
                 positions_list += [tmp_position]
                 coefficient_list += [tmp_coeff]
                 rhs_list += [temp_rhs]
