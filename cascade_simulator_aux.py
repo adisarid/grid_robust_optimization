@@ -5,7 +5,7 @@ Cascade simulator auxiliary functions
 @author: Adi Sarid
 """
 
-import numpy as np # numpy for matrix calculations
+#import numpy as np # numpy for matrix calculations
 import networkx as nx # for using graph representation
 import cplex # using cplex engine to solve flow problem
 import sys
