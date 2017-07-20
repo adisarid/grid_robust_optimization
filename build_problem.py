@@ -56,7 +56,7 @@ def build_cplex_problem():
             if nodes[('d', cur_node)] > 0:
                 dvar_name.append('w_' + cur_node + 's' + cur_scenario)
                 dvar_pos[('w', cur_node, cur_scenario)] = len(dvar_name)-1
-                dvar_obj_coef.append(scenarios[('s_pr', cur_node)]) # scenario relative weight
+                dvar_obj_coef.append(scenarios[('s_pr', cur_scenario)]) # scenario relative weight
                 dvar_lb.append(0)
                 dvar_ub.append(nodes[('d', cur_node)])
                 dvar_type.append('C')
@@ -245,8 +245,6 @@ class MyLazy(LazyConstraintCallback):
         global epsilon
         global bigM
         global print_debug
-
-        epsilon2 = 1e-15 # epsilon2 must be smaller than epsilon 1 !
 
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
