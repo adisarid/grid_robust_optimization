@@ -18,7 +18,7 @@ from time import gmtime, strftime, clock # for placing timestamp on debug soluti
 
 epsilon = 1e-3
 bigM = 1.0/epsilon
-print_debug = False
+print_debug = True
 
 def build_cplex_problem():
     global dvar_pos # used as global to allow access across all functions
@@ -155,34 +155,34 @@ def build_cplex_problem():
             for cur_edge in assoc_edges['out']:
                 # using only outgoing edges incoming will be covered as "outgoing" at a different node
                 # First set failed edges according to input data
-                # DEBUG HERE 05/07/2017.
                 if cur_edge in scenarios[('s', scenario)]:
                     init_failures = [dvar_pos[('F', cur_edge, scenario)]]
                     init_failures_coef = [1]
                     robust_opt.linear_constraints.add(lin_expr = [[init_failures, init_failures_coef]], senses = "E", rhs = [1])
 
 
-                # Phase angle constraints -M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*F_ij
-                # Less than equal side
-                phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
-                phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], -bigM]
-                robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "L", rhs = [0])
-                # Greater than equal side
-                phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
-                phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], bigM]
-                robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "G", rhs = [0])
-
-                # Phase angle for potential edges -M*X_ij <= theta_i-theta_j-x_ij*f_ij <= M*X_ij     *** notice that X is not dependant in scenario but theta and f do depend
-                if cur_edge in [(i[1], i[2]) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]:
-                    # only run if edge has a fixed establishment cost parameter (H)
+                # Phase angle constraints -M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*F_ij   only for existing edges
+                if not (cur_edge in [(i[1], i[2]) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]):
                     # Less than equal side
-                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)]]
+                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
                     phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], -bigM]
                     robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "L", rhs = [0])
                     # Greater than equal side
-                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)]]
+                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
                     phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], bigM]
                     robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "G", rhs = [0])
+
+                # Phase angle for potential edges -M*(1-X_ij)-M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*(1-X_ij) + M*F_ij     *** notice that X is not dependant in scenario but theta and f do depend
+                if cur_edge in [(i[1], i[2]) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]:
+                    # only run if edge has a fixed establishment cost parameter (H)
+                    # Less than equal side
+                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)], dvar_pos[('F', cur_edge, scenario)]]
+                    phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], bigM, -bigM]
+                    robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "L", rhs = [bigM])
+                    # Greater than equal side
+                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)], dvar_pos[('F', cur_edge, scenario)]]
+                    phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], -bigM, bigM]
+                    robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "G", rhs = [-bigM])
 
                     # Transmission capacity for potential edges -M*X_ij <= f_ij <= M*X_ij
                     # Less than equal side
@@ -260,7 +260,7 @@ class MyLazy(LazyConstraintCallback):
             curr_cut_debug = [str(cfe_constraints['coefficients'][i][j]) + '*' + dvar_name[cfe_constraints['positions'][i][j]] for j in xrange(len(cfe_constraints['positions'][i]))]
             self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i])
             if print_debug:
-                print timestampstr, "Adding cut (should fail)        ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
+                print timestampstr, "Adding cut                      ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
 
 
         # temporary debug for forcing specific solution:
@@ -305,6 +305,7 @@ def build_cfe_constraints(current_solution):
     for cur_scenario, failure_dict in simulation_failures.iteritems():
         cur_cascade_iter = 1
         prev_failures = [] # accumulate previous failures for use within the constraints
+        # Add failed edges
         while failure_dict['F'][cur_cascade_iter] != []:
             # as long as failure_dict['F'][step] contains failures - continue to add constraints
             for curr_failed_edge in failure_dict['F'][cur_cascade_iter]: # <- convert later on to list comprehention
@@ -316,6 +317,23 @@ def build_cfe_constraints(current_solution):
                 rhs_list += [temp_rhs]
             prev_failures += failure_dict['F'][cur_cascade_iter] # add to previous failures
             cur_cascade_iter += 1
+
+        # Add non-failed edges (by end of simulation did not fail at all - should be retained)
+        all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
+        non_failed = [cur_edge for cur_edge in all_edges if cur_edge not in failure_dict['all_failed']]
+        for curr_non_failed_edge in non_failed: # <- convert later on to list comprehention
+            tmp_position = X_established + X_not_established +\
+                [dvar_pos[('F', failed_edge, cur_scenario)] for failed_edge in failure_dict['all_failed'] if ('X_', failed_edge) in dvar_pos.keys() if current_solution[dvar_pos[('X_', failed_edge)]] > 0.99] +\
+                [dvar_pos[('F', failed_edge, cur_scenario)] for failed_edge in failure_dict['all_failed'] if ('X_', failed_edge) not in dvar_pos.keys()] +\
+                [dvar_pos[('c', curr_non_failed_edge)]] +\
+                [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
+            tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(failure_dict['all_failed']) + [epsilon] + [1]
+            tmp_rhs = sum([1]*len(X_established)) + sum([1]*len(failure_dict['all_failed'])) + epsilon*abs(current_solution[dvar_pos[('f', curr_non_failed_edge, cur_scenario)]]) + epsilon*epsilon - epsilon*edges[('c',) + curr_non_failed_edge] + 1
+            # DEBUG HERE: this addition doesn't work - figure out why (26/7/17)
+            #positions_list += [tmp_position]
+            #coefficient_list += [tmp_coeff]
+            #rhs_list += [tmp_rhs]
+
 
     cfe_constraints = {'positions': positions_list, 'coefficients': coefficient_list, 'rhs': rhs_list}
 
