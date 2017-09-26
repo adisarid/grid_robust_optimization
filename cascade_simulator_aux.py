@@ -11,7 +11,7 @@ import cplex # using cplex engine to solve flow problem
 import sys
 import csv
 
-
+from debug_output_specs import write_lp_file
 
 def write_sim_steps(filename, failed_edges, flow_per_stage):
     '''
@@ -90,8 +90,7 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     i = 0
     while F[i]:  # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
-        #lpfilename = "c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disable later on.
-        tmp_grid_flow_update = grid_flow_update(G, F[i], False, False)
+        tmp_grid_flow_update = grid_flow_update(G, F[i], write_lp_file, False)
         F[i+1] =  tmp_grid_flow_update['failed_edges']
         tot_failed += F[i+1]
         i += 1

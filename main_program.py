@@ -29,8 +29,7 @@ from time import gmtime, strftime, clock
 timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
 
 # DEBUG PURPOSES - output to text file instead of screen:
-global print_debug
-print_debug = False
+from debug_output_specs import *
 
 if print_debug:
     import sys # for directing print output to a file instead of writing to screen
@@ -74,9 +73,12 @@ current_solution = current_solution + tot_supply + tot_unsupplied
 current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
 
 print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
+print "Supply per scenario:", {tot_supply_sce[i]: tot_supply[i] for i in xrange(len(tot_supply))}
+print "Supply missed per scenario:", {tot_supply_missed[i]: tot_unsupplied[i] for i in xrange(len(tot_supply_sce))}
 
-timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
-export_results.write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
+if write_res_file:
+    timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
+    export_results.write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
 
 
 # Cancel print to file (initiated for debug purposes).

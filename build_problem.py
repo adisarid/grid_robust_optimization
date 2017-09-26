@@ -18,7 +18,8 @@ from time import gmtime, strftime, clock # for placing timestamp on debug soluti
 
 epsilon = 1e-3
 bigM = 1.0/epsilon
-print_debug = True
+
+from debug_output_specs import *
 
 def build_cplex_problem():
     global dvar_pos # used as global to allow access across all functions
@@ -150,6 +151,13 @@ def build_cplex_problem():
                 # case this node (has demand)
                 flow_lhs += [dvar_pos[('w', cur_node, scenario)]]
                 flow_lhs_coef += [-1]
+
+                # w_i^s <= d_i
+                max_sup_lhs = [dvar_pos[('w', cur_node, scenario)]]
+                max_sup_lhs_coef = [1]
+                robust_opt.linear_constraints.add(lin_expr = [[max_sup_lhs, max_sup_lhs_coef]], senses = "L", rhs = [nodes[('d', cur_node)]])
+
+
             robust_opt.linear_constraints.add(lin_expr = [[flow_lhs, flow_lhs_coef]], senses = "E", rhs = [0])
 
             for cur_edge in assoc_edges['out']:
@@ -172,7 +180,7 @@ def build_cplex_problem():
                     phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], bigM]
                     robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "G", rhs = [0])
 
-                # Phase angle for potential edges -M*(1-X_ij)-M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*(1-X_ij) + M*F_ij     *** notice that X is not dependant in scenario but theta and f do depend
+                # Phase angle for potential edges -M*(1-X_ij)-M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*(1-X_ij) + M*F_ij     *** notice that X is not dependent in scenario but theta and f do depend
                 if cur_edge in [(i[1], i[2]) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]:
                     # only run if edge has a fixed establishment cost parameter (H)
                     # Less than equal side
@@ -318,7 +326,7 @@ def build_cfe_constraints(current_solution):
             prev_failures += failure_dict['F'][cur_cascade_iter] # add to previous failures
             cur_cascade_iter += 1
 
-        # Add non-failed edges (by end of simulation did not fail at all - should be retained)
+        # Add non-failed edges (by end of simulation did not fail at all - should be retained
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
         non_failed = [cur_edge for cur_edge in all_edges if cur_edge not in failure_dict['all_failed']]
         for curr_non_failed_edge in non_failed: # <- convert later on to list comprehention
@@ -330,6 +338,7 @@ def build_cfe_constraints(current_solution):
             tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(failure_dict['all_failed']) + [epsilon] + [1]
             tmp_rhs = sum([1]*len(X_established)) + sum([1]*len(failure_dict['all_failed'])) + epsilon*abs(current_solution[dvar_pos[('f', curr_non_failed_edge, cur_scenario)]]) + epsilon*epsilon - epsilon*edges[('c',) + curr_non_failed_edge] + 1
             # DEBUG HERE: this addition doesn't work - figure out why (26/7/17)
+            # Currently this option is disabled - should be added later on!
             #positions_list += [tmp_position]
             #coefficient_list += [tmp_coeff]
             #rhs_list += [tmp_rhs]
