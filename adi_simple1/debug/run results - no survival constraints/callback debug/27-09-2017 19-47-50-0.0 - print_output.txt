@@ -1,0 +1,63 @@
+Lazy constraint(s) or lazy constraint callback is present.
+    Disabling dual reductions (CPX_PARAM_REDUCE) in presolve.
+    Disabling non-linear reductions (CPX_PARAM_PRELINEAR) in presolve.
+Tried aggregator 2 times.
+MIP Presolve eliminated 59 rows and 23 columns.
+MIP Presolve modified 121 coefficients.
+Aggregator did 2 substitutions.
+Reduced MIP has 61 rows, 53 columns, and 197 nonzeros.
+Reduced MIP has 17 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (0.16 ticks)
+Probing time = 0.00 sec. (0.03 ticks)
+Tried aggregator 1 time.
+Reduced MIP has 61 rows, 53 columns, and 197 nonzeros.
+Reduced MIP has 17 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (0.06 ticks)
+Probing time = 0.00 sec. (0.02 ticks)
+MIP emphasis: balance optimality and feasibility.
+MIP search method: traditional branch-and-cut.
+Parallel mode: none, using 1 thread.
+Root relaxation solution time = 0.00 sec. (0.10 ticks)
+
+        Nodes                                         Cuts/
+   Node  Left     Objective  IInf  Best Integer    Best Bound    ItCnt     Gap         Variable B NodeID Parent  Depth
+
+      0     0        7.5000     2                      7.5000       20         
+27-09-2017 19-47-50-0.023 -  Adding cut                       ['1*X_1_2', '1*X_2_3', '-0.001*c_1_2', '-1*F_1_2s1'] <= 1.989999
+27-09-2017 19-47-50-0.023 -  Adding cut                       ['1*X_1_2', '1*X_2_3', '-0.001*c_2_3', '-1*F_2_3s1'] <= 1.99666566667
+27-09-2017 19-47-50-0.023 -  Adding cut                       ['1*X_1_2', '1*X_2_3', '-0.001*c_2_G', '-1*F_2_Gs1'] <= 1.99833233333
+27-09-2017 19-47-50-0.023 -  Adding cut                       ['1*X_1_2', '1*X_2_3', '-0.001*c_1_2', '-1*F_1_2s3'] <= 1.979999
+27-09-2017 19-47-50-0.023 -  Adding cut                       ['1*X_1_2', '1*X_2_3', '-0.001*c_1_G', '-1*F_1_Gs3'] <= 1.984999
+27-09-2017 19-47-50-0.023 -  Adding cut                       ['1*X_1_2', '1*X_2_3', '-0.001*c_2_3', '-1*F_2_3s3'] <= 1.989999
+27-09-2017 19-47-50-0.023 -  Adding cut                       ['1*X_1_2', '1*X_2_3', '-0.001*c_1_2', '-1*F_1_2s2'] <= 1.994999
+27-09-2017 19-47-50-0.023 -  Adding cut                       ['1*X_1_2', '1*X_2_3', '-0.001*c_2_3', '-1*F_2_3s2'] <= 1.994999
+      0     0        7.4666     5                    Cuts: 10       33         
+      0     0        7.2222     7                    Cuts: 10       46         
+      0     0        7.2052     7                    Cuts: 25       64         
+      0     0        7.2041     7                    Cuts: 17       74         
+      0     0        7.2041     8                     Cuts: 6       77         
+      0     0        7.2041     9                  MIRcuts: 1       79         
+27-09-2017 19-47-50-0.118 -  Adding cut                       ['1*X_1_2', '-1*X_2_3', '-0.001*c_2_G', '-1*F_2_Gs1'] <= 0.994999
+*     0+    0                            7.0000        7.2041       79    2.92%
+      0     0        cutoff              7.0000        7.2041       79    2.92%                        0             0
+Elapsed time = 0.20 sec. (3.08 ticks, tree = 0.00 MB, solutions = 1)
+
+Cover cuts applied:  2
+Implied bound cuts applied:  3
+Flow cuts applied:  4
+Mixed integer rounding cuts applied:  12
+Gomory fractional cuts applied:  1
+User cuts applied:  9
+
+Root node processing (before b&c):
+  Real time             =    0.20 sec. (3.08 ticks)
+Sequential b&c:
+  Real time             =    0.00 sec. (0.00 ticks)
+                          ------------
+Total (root+branch&cut) =    0.20 sec. (3.08 ticks)
+Solution status =  101 : MIP_optimal
+Objective value =  7.0
+User cuts applied: 9
+Current (real) objective value: 0.5 MW unsupplied
+Supply per scenario: {'supply_s1': 30.000000000000007, 'supply_s2': 30.0, 'supply_s3': 20.0}
+Supply missed per scenario: {'un_supplied_s2': 0.0, 'un_supplied_s3': 0.5, 'un_supplied_s1': -7.105427357601002e-16}
