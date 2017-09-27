@@ -90,7 +90,7 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     i = 0
     while F[i]:  # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
-        tmp_grid_flow_update = grid_flow_update(G, F[i], write_lp_file, False)
+        tmp_grid_flow_update = grid_flow_update(G, F[i], False, False)
         F[i+1] =  tmp_grid_flow_update['failed_edges']
         tot_failed += F[i+1]
         i += 1

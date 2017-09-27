@@ -339,9 +339,9 @@ def build_cfe_constraints(current_solution):
             tmp_rhs = sum([1]*len(X_established)) + sum([1]*len(failure_dict['all_failed'])) + epsilon*abs(current_solution[dvar_pos[('f', curr_non_failed_edge, cur_scenario)]]) + epsilon*epsilon - epsilon*edges[('c',) + curr_non_failed_edge] + 1
             # DEBUG HERE: this addition doesn't work - figure out why (26/7/17)
             # Currently this option is disabled - should be added later on!
-            #positions_list += [tmp_position]
-            #coefficient_list += [tmp_coeff]
-            #rhs_list += [tmp_rhs]
+            positions_list += [tmp_position]
+            coefficient_list += [tmp_coeff]
+            rhs_list += [tmp_rhs]
 
 
     cfe_constraints = {'positions': positions_list, 'coefficients': coefficient_list, 'rhs': rhs_list}
