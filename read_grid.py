@@ -47,7 +47,7 @@ def read_scenarios(filename_fail, filename_pr):
     dic = dict()
     with open(filename_pr, 'rb') as prfile:
         csv_reader = csv.reader(prfile, delimiter = ',')
-        next(csv_reader) # assuming heade, skip first line
+        next(csv_reader) # assuming header, skip first line
         for row in csv_reader:
             dic[('s_pr', row[0])] = float(row[1])
 
