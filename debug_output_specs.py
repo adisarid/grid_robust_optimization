@@ -10,5 +10,6 @@
 #-------------------------------------------------------------------------------
 
 print_debug = True
+print_degub_verbose = False
 write_res_file = True
 write_lp_file = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disabled by default
