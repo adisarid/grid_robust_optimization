@@ -323,12 +323,15 @@ def build_cfe_constraints(current_solution):
                 positions_list += [tmp_position]
                 coefficient_list += [tmp_coeff]
                 rhs_list += [temp_rhs]
+                if print_degub_verbose:
+                    print "Current flow g=", current_solution[dvar_pos[('f', curr_failed_edge, cur_scenario)]]
             prev_failures += failure_dict['F'][cur_cascade_iter] # add to previous failures
             cur_cascade_iter += 1
 
-        # Add non-failed edges (by end of simulation did not fail at all - should be retained
+        # Add non-failed edges (by end of simulation did not fail at all - should be retained)
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
-        non_failed = [cur_edge for cur_edge in all_edges if cur_edge not in failure_dict['all_failed']]
+        failed_by_scenario = scenarios[('s', cur_scenario)] # check which edges should fail by scenario - these should be excluded from non_failed
+        non_failed = [cur_edge for cur_edge in all_edges if ((cur_edge not in failure_dict['all_failed']) and cur_edge not in failed_by_scenario)]
         for curr_non_failed_edge in non_failed: # <- convert later on to list comprehention
             tmp_position = X_established + X_not_established +\
                 [dvar_pos[('F', failed_edge, cur_scenario)] for failed_edge in failure_dict['all_failed'] if ('X_', failed_edge) in dvar_pos.keys() if current_solution[dvar_pos[('X_', failed_edge)]] > 0.99] +\
@@ -337,8 +340,6 @@ def build_cfe_constraints(current_solution):
                 [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
             tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(failure_dict['all_failed']) + [epsilon] + [1]
             tmp_rhs = sum([1]*len(X_established)) + sum([1]*len(failure_dict['all_failed'])) + epsilon*abs(current_solution[dvar_pos[('f', curr_non_failed_edge, cur_scenario)]]) + epsilon*epsilon - epsilon*edges[('c',) + curr_non_failed_edge] + 1
-            # DEBUG HERE: this addition doesn't work - figure out why (26/7/17)
-            # Currently this option is disabled - should be added later on!
             positions_list += [tmp_position]
             coefficient_list += [tmp_coeff]
             rhs_list += [tmp_rhs]
