@@ -1,0 +1,5 @@
+node,demand,gen_capacity,gen_upgrade_ub,gen_upgrade_cost_fixed,gen_upgrade_cost_linear
+1,10,0,0,0,0
+2,10,0,0,0,0
+3,10,0,0,0,0
+G,0,30,0,0,0
