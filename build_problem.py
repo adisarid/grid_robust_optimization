@@ -310,6 +310,8 @@ def build_cfe_constraints(current_solution):
     X_established_coef = [1]*len(X_established)
     X_not_established_coef = [-1]*len(X_not_established)
 
+    all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
+
     for cur_scenario, failure_dict in simulation_failures.iteritems():
         cur_cascade_iter = 1
         prev_failures = [] # accumulate previous failures for use within the constraints
@@ -329,7 +331,7 @@ def build_cfe_constraints(current_solution):
             cur_cascade_iter += 1
 
         # Add non-failed edges (by end of simulation did not fail at all - should be retained)
-        all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
+        # Make sure this location is good: currently it is nested in the loop of simulation_failures, so might miss some inconsistencies - CHECK THIS!
         failed_by_scenario = scenarios[('s', cur_scenario)] # check which edges should fail by scenario - these should be excluded from non_failed
         non_failed = [cur_edge for cur_edge in all_edges if ((cur_edge not in failure_dict['all_failed']) and cur_edge not in failed_by_scenario)]
         for curr_non_failed_edge in non_failed: # <- convert later on to list comprehention
