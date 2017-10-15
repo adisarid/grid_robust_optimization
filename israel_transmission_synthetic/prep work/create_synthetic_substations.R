@@ -1,5 +1,5 @@
 # Prep work for creating synthetic transmission substations using the CBS population data
-# setwd("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/israel_transmission_synthetic/prep work/")
+setwd("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/israel_transmission_synthetic/prep work/")
 # ==== Load libraries ====
 library(tidyverse)
 library(httr) # for handling http requests from google maps API
@@ -87,7 +87,9 @@ map1 <-
 
 # ==== Clustering points ====
 # use KMeans clustering to create 200 clusters
-# Consider later on to change the clustering method to consider point weight.
+# Consider later on to change the clustering method to consider point weight
+# Also consider converting to a haversine distance function
+# Not sure this is required maybe the current approxmation is good enough
 # See Birchfield, et al. 2017 (Grid Structural Characteristics)
 
 set.seed(0)
@@ -130,7 +132,7 @@ generator.substation.data <- read_csv("generator data.csv") %>%
 generator.substation.data$vertice.num <- 1:NROW(generator.substation.data)
 
 
-ggmap(isr.map) + xlim(c(34,36)) + ylim(c(29.5,33.3)) +
+map4 <- ggmap(isr.map) + xlim(c(34,36)) + ylim(c(29.5,33.3)) +
   geom_point(data = generator.substation.data, 
              aes(x = clust.lon, y = clust.lat, shape = node.type, color = node.type, size = total_population), alpha = 0.8)
 
@@ -138,17 +140,15 @@ ggmap(isr.map) + xlim(c(34,36)) + ylim(c(29.5,33.3)) +
 # compute the minimum spanning tree of the graph represented by generators and substations
 
 # create a distance matrix
+# Consider changing to haversine distance function though Euclidean approximation might be good enough for us
 vert.dist <- generator.substation.data %>%
   ungroup() %>%
   select(clust.lon, clust.lat) %>%
   as.matrix() %>%
   dist(method = "euclidean")
 N <- NROW(generator.substation.data)
-calc.dist <- function(i,j){
-  return(vert.dist[N*(i-1) - i*(i-1)/2 + j-i])
-}
 
-# create a minimum spanning tre and exteact it for work
+# create a minimum spanning tree and exteact it for work
 library(igraph)
 power.grid <- make_full_graph(n = N)
 power.mst <- mst(power.grid, weights = as.vector(vert.dist))
@@ -157,21 +157,76 @@ plot(power.mst)
 # yield a tibble with edges of power.mst (N-1 edges):
 power.edge.adj <- as_edgelist(power.mst) %>%
   as_tibble() %>%
-  rename(ind1 = V1, ind2 = V2) %>%
+  rename(node1 = V1, node2 = V2) %>%
   left_join(generator.substation.data %>% 
               select(vertice.num, clust.lon, clust.lat),
-            by = c("ind1" = "vertice.num")) %>%
+            by = c("node1" = "vertice.num")) %>%
   rename(x1 = clust.lon, y1 = clust.lat) %>%
   left_join(generator.substation.data %>%
               select(vertice.num, clust.lon, clust.lat),
-            by = c("ind2" = "vertice.num")) %>%
-  rename(x2 = clust.lon, y2 = clust.lat)
+            by = c("node2" = "vertice.num")) %>%
+  rename(x2 = clust.lon, y2 = clust.lat) %>%
+  mutate(source = "power.mst")
 
-
+map5 <- map4 + 
+  geom_segment(data = power.edge.adj, aes(x = x1, xend = x2, y = y1, yend = y2), size = 1, alpha = 0.7)
 
 
 # ==== Add optional transmission lines using a Delaunay graph ====
 library("deldir")
 
 power.deldir <- deldir(x = generator.substation.data$clust.lon, y = generator.substation.data$clust.lat)
-power.delaunay <- power.deldir$delsgs
+power.delaunay <- power.deldir$delsgs %>%
+  rename(node1 = ind1,
+         node2 = ind2) %>%
+  mutate(source = "delaunay")
+
+map6 <- map5 + 
+  geom_segment(data = power.delaunay, aes(x = x1, xend = x2, y = y1, yend = y2), size = 0.5, alpha = 0.7, linetype = 2)
+
+
+# ==== Prep transmission line file ====
+# for more meaningful distances I use the haversine approximation (maybe can also add earlier)
+# Use: geosphere::distGeo()
+# STILL NEED TO SETUP CAPACITY OF TRANSMISSION LINE (15/10/2017)
+library(geosphere)
+line.final <- power.edge.adj %>%
+  rbind(power.delaunay) %>%
+  mutate(geodist = distGeo(p1 = cbind(x1, y1), p2 = cbind(x2, y2))/1000) %>%
+  mutate(cost_fixed = ifelse(source == "power.mst", 0, 0.1),
+         cost_linear = geodist*0.01) %>%
+  mutate(susceptance = 1) %>%
+  mutate(capacity = 1500) %>% # CAPACITY TBD after initial solution tested (Mega Watt)
+  filter(source == "power.mst" | geodist <= quantile(geodist, 0.5)) %>% # take min span tree or in closest 50%
+  select(node1, node2, capacity, susceptance, cost_fixed, cost_linear)
+write_excel_csv(path = "../grid_edges.csv", x = line.final)
+
+
+
+# ==== Prep node file ====
+# total capacity is 15,810.9 Mega Watts.
+# Naively splitting the capacity per capita to a total of 80% (12,648.72 Mega Watts)
+tot.cap.div <- sum(generator.substation.data$tot_cap[is.na(generator.substation.data$clust)])*0.8
+node.final <- generator.substation.data %>%
+  rename(node = vertice.num) %>%
+  mutate(demand = ifelse(is.na(clust), 0, tot.cap.div/total_population)) %>%
+  rename(gen_capacity = tot_cap) %>%
+  replace_na(list(gen_capacity = 0)) %>%
+  mutate(gen_upgrade_ub = 0,
+         gen_upgrade_cost_fixed = 0,
+         gen_upgrade_cost_linear = 0) %>% # for now disable generation capacity upgrades
+  select(node, demand, gen_capacity, gen_upgrade_ub, gen_upgrade_cost_fixed, gen_upgrade_cost_linear)
+write_excel_csv(path = "../grid_nodes.csv", x = node.final)
+  
+# ==== Prep additional parameters file ====
+additional.params <- tibble(param_name = "C", param_value = 25)
+write_excel_csv(path = "../additional_params.csv", x = additional.params)
+
+
+# ==== Prep failure scenarios ====
+# I'll prepare 5 scenarios:
+#     1. Nominal (implicit): nothing fails, w.p. 90%
+#     2. Northern extensive failures - 30% of edges fail, w.p. 2.5%
+#     3. Southern extensive failures - 30% of edges fail, w.p. 2.5%
+#     4. Eastern extensive failures - 30% of edges fail, w.p. 2.5%
+#     5. Western extensive failures - 30% of edges fail, w.p. 2.5%
