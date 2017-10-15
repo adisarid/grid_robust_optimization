@@ -15,7 +15,7 @@ import networkx as nx # to build a grid networkx object
 
 
 # set intance to solve as a robust planning problem
-instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\adi_simple1\\'
+from debug_output_specs import instance_location as instance_location
 
 def read_nodes(filename):
     dic = dict()
