@@ -21,7 +21,7 @@ bigM = 1.0/epsilon
 
 from debug_output_specs import *
 
-line_coef_scale = 15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
+from global_definitions import line_coef_scale
 
 def build_cplex_problem():
     global dvar_pos # used as global to allow access across all functions
@@ -311,49 +311,50 @@ def build_cfe_constraints(current_solution):
     X_not_established = [cur_pos for xkey, cur_pos in dvar_pos.iteritems() if xkey[0] == 'X_' and current_solution[dvar_pos[xkey]] < 0.001]
     X_established_coef = [1]*len(X_established)
     X_not_established_coef = [-1]*len(X_not_established)
+    c_upgraded = [cur_pos for ckey, cur_pos in dvar_pos.iteritems() if ckey[0] == 'c' and current_solution[dvar_pos[ckey]] > 0.999]
+    c_not_upgraded = [cur_pos for ckey, cur_pos in dvar_pos.iteritems() if ckey[0] == 'c' and current_solution[dvar_pos[ckey]] < 0.001]
 
     all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
-
+    if print_degub_verbose:
+        print "Simulation results:", simulation_failures
     for cur_scenario, failure_dict in simulation_failures.iteritems():
         cur_cascade_iter = 1
-        prev_failures = [] # accumulate previous failures for use within the constraints
+        #prev_failures = [] # accumulate previous failures for use within the constraints
         # Add failed edges
-        while failure_dict['F'][cur_cascade_iter] != []:
-            # as long as failure_dict['F'][step] contains failures - continue to add constraints
-            for curr_failed_edge in failure_dict['F'][cur_cascade_iter]: # <- convert later on to list comprehention
-                if current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]] <= 0.01: # if the edge is not set to "Failed" in current solution but is failed by simulator
-                    if print_degub_verbose:
-                        print "Edge", curr_failed_edge, cur_scenario, "is not set to fail in solution, but should fail by simulation:", failure_dict['F'][cur_cascade_iter]
-                    tmp_position = X_established + X_not_established + [dvar_pos[('F',failed_edge, cur_scenario)] for failed_edge in prev_failures] + [dvar_pos[('c', curr_failed_edge)]] + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
-                    tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(prev_failures) + [-epsilon*line_coef_scale] + [-1] # updated to scaling of transmission line capacity as binary
-                    temp_rhs = sum([1]*len(X_established) + [1]*len(X_not_established)) + sum([1]*len(prev_failures)) - epsilon*abs(current_solution[dvar_pos[('f', curr_failed_edge, cur_scenario)]]) - epsilon*epsilon + epsilon*edges[('c',) + curr_failed_edge]
-                    positions_list += [tmp_position]
-                    coefficient_list += [tmp_coeff]
-                    rhs_list += [temp_rhs]
-                    if print_degub_verbose:
-                        print "Current flow g=", current_solution[dvar_pos[('f', curr_failed_edge, cur_scenario)]]
-            prev_failures += failure_dict['F'][cur_cascade_iter] # add to previous failures
+        if print_degub_verbose:
+            print "Simulation results: scenario", cur_scenario, " failures:", failure_dict['F'][cur_cascade_iter], " at cascade_iter", cur_cascade_iter
+            str_flag = "ok"
+        for curr_failed_edge in failure_dict['F'][cur_cascade_iter]: # <- convert later on to list comprehention
+            if current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]] < 0.001:
+                if print_degub_verbose:
+                    str_flag = "CONTRADICTION (survived but should have failed)"
+                tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
+                tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [-1]
+                tmp_rhs = len(X_established) + len(c_upgraded) - epsilon
+                positions_list += [tmp_position]
+                coefficient_list += [tmp_coeff]
+                rhs_list += [tmp_rhs]
+            #prev_failures += failure_dict['F'][cur_cascade_iter] # add to previous failures
+            if print_degub_verbose:
+                print ('F', curr_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]], "<--", str_flag
             cur_cascade_iter += 1
 
         # Add non-failed edges (by end of simulation did not fail at all) - should be retained
-        # The following list retains all edge which failed in the solution (not as a result of initialization of scenario at t=0), and are not in the failures by the simulation
-##        all_failed_solution = [cur_edge for cur_edge in all_edges if (current_solution[('F', cur_edge, cur_scenario)] >= 0.9 and (cur_edge not in scenarios[('s', cur_scenario)]) and cur_edge not in failure_dict['all_failed'])]
-        # then, add the following constraints:
-##        for curr_non_failed_edge in all_failed_solution: # <- convert later on to list comprehention
-##            if curr_non_failed_edge not in failure_dict['all_failed']:
-##                # currently disabled due to rethink - the constraint might be wrong (at the modelling level).
-##                pass
-##                tmp_position = X_established + X_not_established +\
-##                    [dvar_pos[('F', failed_edge, cur_scenario)] for failed_edge in failure_dict['all_failed'] if ('X_', failed_edge) in dvar_pos.keys() if current_solution[dvar_pos[('X_', failed_edge)]] > 0.99] +\
-##                    [dvar_pos[('F', failed_edge, cur_scenario)] for failed_edge in failure_dict['all_failed'] if ('X_', failed_edge) in dvar_pos.keys() if current_solution[dvar_pos[('X_', failed_edge)]] < 0.01] +\
-##                    [dvar_pos[('c', curr_non_failed_edge)]] +\
-##                    [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
-##                tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1*line_coef_scale]*len(failure_dict['all_failed']) + [epsilon] + [1]
-##                tmp_rhs = sum([1]*len(X_established)) + sum([1]*len(failure_dict['all_failed'])) + epsilon*abs(current_solution[dvar_pos[('f', curr_non_failed_edge, cur_scenario)]]) + epsilon*epsilon - line_coef_scale*epsilon*edges[('c',) + curr_non_failed_edge] + 1
-##                positions_list += [tmp_position]
-##                coefficient_list += [tmp_coeff]
-##                rhs_list += [tmp_rhs]
-
+        # the non failed edges are all the edges which are not in prev_failures
+        non_failed_edges = [cur_edge for cur_edge in all_edges if cur_edge not in failure_dict['all_failed']]
+        for curr_non_failed_edge in non_failed_edges: # <- convert later on to list comprehention
+            str_flag = "ok"
+            if current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]] > 0.999:
+                if print_degub_verbose:
+                    str_flag = "CONTRADICTION (failed but should not have)"
+                tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
+                tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [1]
+                tmp_rhs = len(X_established) + len(c_upgraded) + 1 - epsilon #+1 for the 1-F on the right hand side of the equation
+                positions_list += [tmp_position]
+                coefficient_list += [tmp_coeff]
+                rhs_list += [tmp_rhs]
+            if print_degub_verbose:
+                print ('F', curr_non_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]], "<--", str_flag
 
     cfe_constraints = {'positions': positions_list, 'coefficients': coefficient_list, 'rhs': rhs_list}
 
