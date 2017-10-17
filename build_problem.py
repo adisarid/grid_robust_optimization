@@ -261,6 +261,7 @@ class MyLazy(LazyConstraintCallback):
         current_solution = self.get_values()
         if print_debug:
             timestampstr = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
+        if write_mid_run_res_files:
             write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_callback_solution.csv')
 
         cfe_constraints = build_cfe_constraints(current_solution)
@@ -318,26 +319,23 @@ def build_cfe_constraints(current_solution):
     if print_degub_verbose:
         print "Simulation results:", simulation_failures
     for cur_scenario, failure_dict in simulation_failures.iteritems():
-        cur_cascade_iter = 1
-        #prev_failures = [] # accumulate previous failures for use within the constraints
         # Add failed edges
-        if print_degub_verbose:
-            print "Simulation results: scenario", cur_scenario, " failures:", failure_dict['F'][cur_cascade_iter], " at cascade_iter", cur_cascade_iter
-            str_flag = "ok"
-        for curr_failed_edge in failure_dict['F'][cur_cascade_iter]: # <- convert later on to list comprehention
-            if current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]] < 0.001:
-                if print_degub_verbose:
-                    str_flag = "CONTRADICTION (survived but should have failed)"
-                tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
-                tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [-1]
-                tmp_rhs = len(X_established) + len(c_upgraded) - epsilon
-                positions_list += [tmp_position]
-                coefficient_list += [tmp_coeff]
-                rhs_list += [tmp_rhs]
-            #prev_failures += failure_dict['F'][cur_cascade_iter] # add to previous failures
+        for cur_cascade_iter in xrange(1, failure_dict['t']): # <- split to iterations, can be used for sensitivity analysis (to number of iterations used to create the lazy constratins)
             if print_degub_verbose:
-                print ('F', curr_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]], "<--", str_flag
-            cur_cascade_iter += 1
+                print "Simulation results: scenario", cur_scenario, " failures:", failure_dict['F'][cur_cascade_iter], " at cascade_iter", cur_cascade_iter
+            for curr_failed_edge in failure_dict['F'][cur_cascade_iter]: # <- convert later on to list comprehention
+                str_flag = "ok"
+                if current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]] < 0.001:
+                    if print_degub_verbose:
+                        str_flag = "CONTRADICTION (survived but should have failed)"
+                    tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
+                    tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [-1]
+                    tmp_rhs = len(X_established) + len(c_upgraded) - epsilon
+                    positions_list += [tmp_position]
+                    coefficient_list += [tmp_coeff]
+                    rhs_list += [tmp_rhs]
+                if print_degub_verbose:
+                    print ('F', curr_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]], "<--", str_flag
 
         # Add non-failed edges (by end of simulation did not fail at all) - should be retained
         # the non failed edges are all the edges which are not in prev_failures
