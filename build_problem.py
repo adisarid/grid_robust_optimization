@@ -326,7 +326,7 @@ def build_cfe_constraints(current_solution):
                         print "Edge", curr_failed_edge, cur_scenario, "is not set to fail in solution, but should fail by simulation:", failure_dict['F'][cur_cascade_iter]
                     tmp_position = X_established + X_not_established + [dvar_pos[('F',failed_edge, cur_scenario)] for failed_edge in prev_failures] + [dvar_pos[('c', curr_failed_edge)]] + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
                     tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(prev_failures) + [-epsilon*line_coef_scale] + [-1] # updated to scaling of transmission line capacity as binary
-                    temp_rhs = sum([1]*len(X_established)) + sum([1]*len(prev_failures)) - epsilon*abs(current_solution[dvar_pos[('f', curr_failed_edge, cur_scenario)]]) - epsilon*epsilon + epsilon*edges[('c',) + curr_failed_edge]
+                    temp_rhs = sum([1]*len(X_established) + [1]*len(X_not_established)) + sum([1]*len(prev_failures)) - epsilon*abs(current_solution[dvar_pos[('f', curr_failed_edge, cur_scenario)]]) - epsilon*epsilon + epsilon*edges[('c',) + curr_failed_edge]
                     positions_list += [tmp_position]
                     coefficient_list += [tmp_coeff]
                     rhs_list += [temp_rhs]
