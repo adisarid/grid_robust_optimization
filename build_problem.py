@@ -274,14 +274,6 @@ class MyLazy(LazyConstraintCallback):
                 print timestampstr, "Adding cut ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
 
 
-        # temporary debug for forcing specific solution:
-        #tmpdbg = [[[48], [1]], [[70], [1]], [[77],[1]], [[69],[1]], [[62],[1]], [[55],[1]], [[47],[1]], [[42],[1]]]
-        #tmpdbg_rhs = [1, 1, 25, 20, 25, 25, 20, 0]
-        #for i in xrange(len(tmpdbg)):
-        #    self.add(constraint = cplex.SparsePair(tmpdbg[i][0], tmpdbg[i][1]), sense = "E", rhs = tmpdbg_rhs[i])
-
-
-
 def build_cfe_constraints(current_solution):
     """
     The function uses input from the cfe simulation (simulation_failures) and the grid, to build
@@ -319,6 +311,7 @@ def build_cfe_constraints(current_solution):
     if print_degub_verbose:
         print "Simulation results:", simulation_failures
     for cur_scenario, failure_dict in simulation_failures.iteritems():
+        add_constraint_limit = limit_lazy_add*1
         # Add failed edges
         for cur_cascade_iter in xrange(1, failure_dict['t']): # <- split to iterations, can be used for sensitivity analysis (to number of iterations used to create the lazy constratins)
             if print_degub_verbose:
@@ -328,12 +321,16 @@ def build_cfe_constraints(current_solution):
                 if current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]] < 0.001:
                     if print_degub_verbose:
                         str_flag = "CONTRADICTION (survived but should have failed)"
-                    tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
-                    tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [-1]
-                    tmp_rhs = len(X_established) + len(c_upgraded) - epsilon
-                    positions_list += [tmp_position]
-                    coefficient_list += [tmp_coeff]
-                    rhs_list += [tmp_rhs]
+                    if add_constraint_limit != 0:
+                        add_constraint_limit -= 1
+                        if print_degub_verbose and add_constraint_limit > 0:
+                            print "Limiting number of lazy constraints per scenario: only", add_constraint_limit, "of", limit_lazy_add, "left (scenario", cur_scenario, ")"
+                        tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
+                        tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [-1]
+                        tmp_rhs = len(X_established) + len(c_upgraded) - epsilon
+                        positions_list += [tmp_position]
+                        coefficient_list += [tmp_coeff]
+                        rhs_list += [tmp_rhs]
                 if print_degub_verbose:
                     print ('F', curr_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]], "<--", str_flag
 
@@ -345,12 +342,16 @@ def build_cfe_constraints(current_solution):
             if current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]] > 0.999:
                 if print_degub_verbose:
                     str_flag = "CONTRADICTION (failed but should not have)"
-                tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
-                tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [1]
-                tmp_rhs = len(X_established) + len(c_upgraded) + 1 - epsilon #+1 for the 1-F on the right hand side of the equation
-                positions_list += [tmp_position]
-                coefficient_list += [tmp_coeff]
-                rhs_list += [tmp_rhs]
+                if add_constraint_limit != 0:
+                    add_constraint_limit -= 1
+                    if print_degub_verbose and add_constraint_limit > 0:
+                        print "Limiting number of lazy constraints per scenario: only", add_constraint_limit, "of", limit_lazy_add, "left (scenario", cur_scenario, ")"
+                    tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
+                    tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [1]
+                    tmp_rhs = len(X_established) + len(c_upgraded) + 1 - epsilon #+1 for the 1-F on the right hand side of the equation
+                    positions_list += [tmp_position]
+                    coefficient_list += [tmp_coeff]
+                    rhs_list += [tmp_rhs]
             if print_degub_verbose:
                 print ('F', curr_non_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]], "<--", str_flag
 
