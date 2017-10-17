@@ -270,7 +270,7 @@ class MyLazy(LazyConstraintCallback):
             curr_cut_debug = [str(cfe_constraints['coefficients'][i][j]) + '*' + dvar_name[cfe_constraints['positions'][i][j]] for j in xrange(len(cfe_constraints['positions'][i]))]
             self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i])
             if print_debug:
-                print timestampstr, "Adding cut                      ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
+                print timestampstr, "Adding cut ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
 
 
         # temporary debug for forcing specific solution:
@@ -322,6 +322,8 @@ def build_cfe_constraints(current_solution):
             # as long as failure_dict['F'][step] contains failures - continue to add constraints
             for curr_failed_edge in failure_dict['F'][cur_cascade_iter]: # <- convert later on to list comprehention
                 if current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]] <= 0.01: # if the edge is not set to "Failed" in current solution but is failed by simulator
+                    if print_degub_verbose:
+                        print "Edge", curr_failed_edge, cur_scenario, "is not set to fail in solution, but should fail by simulation:", failure_dict['F'][cur_cascade_iter]
                     tmp_position = X_established + X_not_established + [dvar_pos[('F',failed_edge, cur_scenario)] for failed_edge in prev_failures] + [dvar_pos[('c', curr_failed_edge)]] + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
                     tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(prev_failures) + [-epsilon*line_coef_scale] + [-1] # updated to scaling of transmission line capacity as binary
                     temp_rhs = sum([1]*len(X_established)) + sum([1]*len(prev_failures)) - epsilon*abs(current_solution[dvar_pos[('f', curr_failed_edge, cur_scenario)]]) - epsilon*epsilon + epsilon*edges[('c',) + curr_failed_edge]
