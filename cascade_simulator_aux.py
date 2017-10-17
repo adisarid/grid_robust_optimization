@@ -83,7 +83,7 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     F[0] = init_fail_edges
 
     # initialize flow dictionary for high resolution of solution (output of flow at each step)
-    tot_failed = []
+    tot_failed = [] + init_fail_edges # iniclude initial failures in all_failed
     # initialize flow
     #current_flow = compute_flow(G)
     # loop
