@@ -55,30 +55,31 @@ robust_opt_cplex.solve()  #solve the model
 print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
 # the following line prints the corresponding status string
 print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
-print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
-print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
+if robust_opt_cplex.solution.get_status != 103:
+    print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
+    print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
 
-# export the obtained solution to a file
-# compute total supply per scenario
-current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value()]
-current_var_names = robust_opt_cplex.variables.get_names() + ['Objective']
+    # export the obtained solution to a file
+    # compute total supply per scenario
+    current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value()]
+    current_var_names = robust_opt_cplex.variables.get_names() + ['Objective']
 
-tot_supply = [sum([current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-tot_unsupplied = [scenarios[cur_scenario]*sum([nodes[('d', wkey[1])]-current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-tot_supply_sce = ['supply_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-tot_supply_missed = ['un_supplied_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+    tot_supply = [sum([current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+    tot_unsupplied = [scenarios[cur_scenario]*sum([nodes[('d', wkey[1])]-current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+    tot_supply_sce = ['supply_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+    tot_supply_missed = ['un_supplied_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
 
-# add some info to results
-current_solution = current_solution + tot_supply + tot_unsupplied
-current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
+    # add some info to results
+    current_solution = current_solution + tot_supply + tot_unsupplied
+    current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
 
-print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
-print "Supply per scenario:", {tot_supply_sce[i]: tot_supply[i] for i in xrange(len(tot_supply))}
-print "Supply missed per scenario:", {tot_supply_missed[i]: tot_unsupplied[i] for i in xrange(len(tot_supply_sce))}
+    print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
+    print "Supply per scenario:", {tot_supply_sce[i]: tot_supply[i] for i in xrange(len(tot_supply))}
+    print "Supply missed per scenario:", {tot_supply_missed[i]: tot_unsupplied[i] for i in xrange(len(tot_supply_sce))}
 
-if write_res_file:
-    timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
-    export_results.write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
+    if write_res_file:
+        timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
+        export_results.write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
 
 
 # Cancel print to file (initiated for debug purposes).
