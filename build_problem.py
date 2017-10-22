@@ -15,6 +15,7 @@ import compute_cascade # needed for the lazy call backs algorithm
 from read_grid import nodes, edges, scenarios, params # using global variables for easy reading into lazy callback class
 from export_results import write_names_values # imported for writing callback information - debugging purpuses
 from time import gmtime, strftime, clock # for placing timestamp on debug solution files
+import csv
 
 epsilon = 1e-3
 bigM = 1.0/epsilon
@@ -255,6 +256,7 @@ class MyLazy(LazyConstraintCallback):
         global epsilon
         global bigM
         global print_debug
+        global print_cfe_results
 
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
@@ -264,7 +266,10 @@ class MyLazy(LazyConstraintCallback):
         if write_mid_run_res_files:
             write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_callback_solution.csv')
 
-        cfe_constraints = build_cfe_constraints(current_solution)
+        if not print_cfe_results==False:
+            print_cfe_results = timestampstr
+
+        cfe_constraints = build_cfe_constraints(current_solution, timestampstr = print_cfe_results)
 
         # Adding lazy constraints one by one - currently don't know how to do this in batch
         for i in xrange(len(cfe_constraints['positions'])):
@@ -274,13 +279,15 @@ class MyLazy(LazyConstraintCallback):
                 print timestampstr, "Adding cut ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
 
 
-def build_cfe_constraints(current_solution):
+def build_cfe_constraints(current_solution, timestampstr):
     """
     The function uses input from the cfe simulation (simulation_failures) and the grid, to build
     a set of constraints which will make sure that simulation results and constraints are aligned
     This is the main function which generates the lazy callbacks.
     The function returns the constraints as a dictionary
     {'positions': [[],[],[],...], 'coefficients': [[],[],[],...], 'rhs': [a,b,c,...]}
+
+    if the input timestampstr is not False then a csv file with the failed and survivde edges will be saved
 
     """
 
@@ -298,6 +305,14 @@ def build_cfe_constraints(current_solution):
 
     # build new grid based on solution and return the inconsistent failures
     simulation_failures = compute_cascade.compute_failures(nodes, edges, scenarios, current_solution, dvar_pos)
+    if not timestampstr == False:
+        # print simlation results as a file with timestampstr in the filename
+        current_failures = [[sce, edge_failed[0], edge_failed[1]] for sce in simulation_failures.keys() for edge_failed in simulation_failures[sce]['all_failed']]
+        sim_fail_filename = 'c:/temp/grid_cascade_output/simulation_failures/' + timestampstr + 'current_simulation_failures.csv'
+        with open(sim_fail_filename, 'wb') as csvfile:
+            simulation_fail_out = csv.writer(csvfile, delimiter = ',')
+            simulation_fail_out.writerow(['scenario', 'edge_1', 'edge_2'])
+            simulation_fail_out.writerows(current_failures)
 
     # set the X variables
     X_established = [cur_pos for xkey, cur_pos in dvar_pos.iteritems() if xkey[0] == 'X_' and current_solution[dvar_pos[xkey]] > 0.999]
