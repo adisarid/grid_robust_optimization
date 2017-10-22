@@ -136,15 +136,19 @@ plot.power.step <- function(step.character){
                                ncol = 2,
                                labels = "auto")
   
-  return(final.grid.plot)
+  ggsave(filename = paste0("c:/temp/grid_cascade_output/plot_output/",
+                           str_sub(lubridate::now(), start = 0, end = 10), " - ", step.character, ".jpg"),
+         plot = final.grid.plot)
+  return(0)
 }
 
 # ==== create mass figures ====
-
-steps.charts <- sim.results %>%
+# This takes a while
+# Saves all steps into charts
+sim.results %>%
   select(source) %>%
   unique() %>%
-  as.matrix() %>%
-  map( ~ plot.power.step(.))
+  group_by(source) %>%
+  do(tmp = plot.power.step(step.character = .$source))
 
 
