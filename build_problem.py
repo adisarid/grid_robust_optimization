@@ -261,8 +261,9 @@ class MyLazy(LazyConstraintCallback):
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
         current_solution = self.get_values()
-        if print_debug:
-            timestampstr = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
+
+        timestampstr = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
+
         if write_mid_run_res_files:
             write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_callback_solution.csv')
 
@@ -275,7 +276,7 @@ class MyLazy(LazyConstraintCallback):
         for i in xrange(len(cfe_constraints['positions'])):
             curr_cut_debug = [str(cfe_constraints['coefficients'][i][j]) + '*' + dvar_name[cfe_constraints['positions'][i][j]] for j in xrange(len(cfe_constraints['positions'][i]))]
             self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i])
-            if print_debug:
+            if print_debug_verbose:
                 print timestampstr, "Adding cut ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
 
 
@@ -323,22 +324,22 @@ def build_cfe_constraints(current_solution, timestampstr):
     c_not_upgraded = [cur_pos for ckey, cur_pos in dvar_pos.iteritems() if ckey[0] == 'c' and current_solution[dvar_pos[ckey]] < 0.001]
 
     all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
-    if print_degub_verbose:
+    if print_debug_verbose:
         print "Simulation results:", simulation_failures
     for cur_scenario, failure_dict in simulation_failures.iteritems():
         add_constraint_limit = limit_lazy_add*1
         # Add failed edges
         for cur_cascade_iter in xrange(1, failure_dict['t']): # <- split to iterations, can be used for sensitivity analysis (to number of iterations used to create the lazy constratins)
-            if print_degub_verbose:
+            if print_debug_verbose:
                 print "Simulation results: scenario", cur_scenario, " failures:", failure_dict['F'][cur_cascade_iter], " at cascade_iter", cur_cascade_iter
             for curr_failed_edge in failure_dict['F'][cur_cascade_iter]: # <- convert later on to list comprehention
                 str_flag = "ok"
                 if current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]] < 0.001:
-                    if print_degub_verbose:
+                    if print_debug_verbose:
                         str_flag = "CONTRADICTION (survived but should have failed)"
                     if add_constraint_limit != 0:
                         add_constraint_limit -= 1
-                        if print_degub_verbose and add_constraint_limit > 0:
+                        if print_debug_verbose and add_constraint_limit > 0:
                             print "Limiting number of lazy constraints per scenario: only", add_constraint_limit, "of", limit_lazy_add, "left (scenario", cur_scenario, ")"
                         tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_failed_edge, cur_scenario)]]
                         tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [-1]
@@ -346,7 +347,7 @@ def build_cfe_constraints(current_solution, timestampstr):
                         positions_list += [tmp_position]
                         coefficient_list += [tmp_coeff]
                         rhs_list += [tmp_rhs]
-                if print_degub_verbose:
+                if print_debug_verbose:
                     print ('F', curr_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_failed_edge, cur_scenario)]], "<--", str_flag
 
         # Add non-failed edges (by end of simulation did not fail at all) - should be retained
@@ -355,11 +356,11 @@ def build_cfe_constraints(current_solution, timestampstr):
         for curr_non_failed_edge in non_failed_edges: # <- convert later on to list comprehention
             str_flag = "ok"
             if current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]] > 0.999:
-                if print_degub_verbose:
+                if print_debug_verbose:
                     str_flag = "CONTRADICTION (failed but should not have)"
                 if add_constraint_limit != 0:
                     add_constraint_limit -= 1
-                    if print_degub_verbose and add_constraint_limit > 0:
+                    if print_debug_verbose and add_constraint_limit > 0:
                         print "Limiting number of lazy constraints per scenario: only", add_constraint_limit, "of", limit_lazy_add, "left (scenario", cur_scenario, ")"
                     tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
                     tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [1]
@@ -367,7 +368,7 @@ def build_cfe_constraints(current_solution, timestampstr):
                     positions_list += [tmp_position]
                     coefficient_list += [tmp_coeff]
                     rhs_list += [tmp_rhs]
-            if print_degub_verbose:
+            if print_debug_verbose:
                 print ('F', curr_non_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]], "<--", str_flag
 
     cfe_constraints = {'positions': positions_list, 'coefficients': coefficient_list, 'rhs': rhs_list}
