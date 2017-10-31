@@ -207,9 +207,10 @@ write_excel_csv(path = "../grid_edges.csv", x = line.final)
 # total capacity is 15,810.9 Mega Watts.
 # Naively splitting the capacity per capita to a total of 80% (12,648.72 Mega Watts)
 tot.cap.div <- sum(generator.substation.data$tot_cap[is.na(generator.substation.data$clust)])*0.8
+il.pop.tot <- sum(generator.substation.data$total_population[!is.na(generator.substation.data$clust)])
 node.final <- generator.substation.data %>%
   rename(node = vertice.num) %>%
-  mutate(demand = ifelse(is.na(clust), 0, tot.cap.div/total_population)) %>%
+  mutate(demand = ifelse(is.na(clust), 0, tot.cap.div*total_population/il.pop.tot)) %>%
   rename(gen_capacity = tot_cap) %>%
   replace_na(list(gen_capacity = 0)) %>%
   mutate(gen_upgrade_ub = 0,
@@ -217,7 +218,7 @@ node.final <- generator.substation.data %>%
          gen_upgrade_cost_linear = 0) %>% # for now disable generation capacity upgrades
   select(node, demand, gen_capacity, gen_upgrade_ub, gen_upgrade_cost_fixed, gen_upgrade_cost_linear)
 write_excel_csv(path = "../grid_nodes.csv", x = node.final)
-  
+
 # ==== Prep additional parameters file ====
 additional.params <- tibble(param_name = "C", param_value = 25)
 write_excel_csv(path = "../additional_params.csv", x = additional.params)
@@ -226,7 +227,79 @@ write_excel_csv(path = "../additional_params.csv", x = additional.params)
 # ==== Prep failure scenarios ====
 # I'll prepare 5 scenarios:
 #     1. Nominal (implicit): nothing fails, w.p. 90%
-#     2. Northern extensive failures - 30% of edges fail, w.p. 2.5%
+#     2. Northern selected nodes - all edges surrounding three nodes with the highest degree, w.p. 2.5%
 #     3. Southern extensive failures - 30% of edges fail, w.p. 2.5%
-#     4. Eastern extensive failures - 30% of edges fail, w.p. 2.5%
-#     5. Western extensive failures - 30% of edges fail, w.p. 2.5%
+#     4. Gush dan failures - 30% of edges fail, w.p. 2.5%
+#     5. Country wide extensive failures - 40% of edges fail, w.p. 2.5%
+
+# plot nodes on map with numbers for easy selection
+map7 <- map6 + geom_text(data = generator.substation.data, aes(x = clust.lon, y = clust.lat, label = vertice.num))
+
+# compute the degree of each of the existing nodes to select a targeted node smartly
+nd.app <- line.final %>%
+  group_by(node1) %>%
+  tally() %>%
+  rename(vertice.num = node1) %>%
+  bind_rows(line.final %>%
+              group_by(node2) %>%
+              tally() %>%
+              rename(vertice.num = node2)) %>%
+  group_by(vertice.num) %>%
+  summarize(vertice.degree = sum(n)) %>%
+  left_join(generator.substation.data)
+
+map8 <- ggmap(isr.map) + xlim(c(34,36)) + ylim(c(29.5,33.3)) + 
+  geom_point(data = nd.app, aes(x = clust.lon, y = clust.lat, color = vertice.degree)) + 
+  geom_text(data = nd.app, aes(x = clust.lon, y = clust.lat, label = vertice.num), size = 3, nudge_x = 0.05)
+
+# For northern scenario, select 3 nodes with the highest degree and fail surrounding edges
+northern.scenario.nodes <- nd.app %>% 
+  filter(clust.lat >= 32.7) %>%
+  arrange(desc(vertice.degree)) %>%
+  head(3)
+northern.failed.edges <- line.final %>%
+  select(node1, node2) %>%
+  filter(node1 %in% northern.scenario.nodes$vertice.num | node2 %in% northern.scenario.nodes$vertice.num) %>%
+  mutate(scenario = 1) %>%
+  select(scenario, node1, node2)
+
+# For southern scenario, select 50% of edges which exist
+southern.scenario.edges <- nd.app %>% 
+  filter(clust.lat <= 31.5)
+set.seed(1)
+southern.failed.edges <- line.final %>% 
+  filter(cost_fixed == 0) %>%
+  select(node1, node2) %>%
+  filter(node1 %in% southern.scenario.edges$vertice.num | node2 %in% southern.scenario.edges$vertice.num) %>%
+  mutate(scenario = 2) %>%
+  filter(runif(length(scenario))<.5)
+
+# For Gush dan scenario, select 30% of edges which exist
+gushdan.scenario.edges <- nd.app %>%
+  filter(clust.lat <= 32.2 & clust.lat >= 31.8 & clust.lon <= 35)
+
+ggmap(isr.map) + geom_point(data = gushdan.scenario.edges, aes(clust.lon, clust.lat))
+
+set.seed(2)
+gushdan.failed.edges <- line.final %>% 
+  filter(cost_fixed == 0) %>%
+  select(node1, node2) %>%
+  filter(node1 %in% gushdan.scenario.edges$vertice.num | node2 %in% gushdan.scenario.edges$vertice.num) %>%
+  mutate(scenario = 3) %>%
+  filter(runif(length(scenario))<.3)
+  
+# For country wide extensive failure scenario, select 40% of edges (existing and non existing)
+extensive.failed.edges <- line.final %>%
+  mutate(scenario = 4) %>%
+  filter(runif(length(scenario))<.4) %>%
+  select(scenario, node1, node2)
+
+extensive.failed.edges %>%
+  bind_rows(southern.failed.edges, 
+            gushdan.failed.edges,
+            northern.failed.edges) %>%
+  write_excel_csv("../scenario_failures.csv")
+
+# Scenario probabilities
+tibble(scenario = 1:4, probability = 0.025) %>%
+  write_excel_csv("scenario_probabilites.csv")
