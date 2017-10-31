@@ -48,9 +48,6 @@ if print_debug:
 
 robust_opt_cplex.register_callback(build_problem.MyLazy) # register the lazy callback
 
-# DEBUG - forcing specific solution
-#robust_opt_cplex.linear_constraints.add(lin_expr = [[[48], [1]], [[70], [1]], [[77],[1]], [[69],[1]], [[62],[1]], [[55],[1]], [[47],[1]]], senses = "E"*7, rhs = [1, 1, 25, 20, 25, 25, 20])
-
 robust_opt_cplex.solve()  #solve the model
 print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
 # the following line prints the corresponding status string
