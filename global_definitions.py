@@ -9,6 +9,5 @@
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
-instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\adi_simple2_discrete\\'
-
-line_coef_scale = 15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
+instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\israel_transmission_synthetic\\'
+line_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
