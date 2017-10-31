@@ -190,16 +190,30 @@ map6 <- map5 +
 # Use: geosphere::distGeo()
 # STILL NEED TO SETUP CAPACITY OF TRANSMISSION LINE (15/10/2017)
 library(geosphere)
+
+# I set the nominal flow values by solving the flow problem (DC load flow model as an "initialization")
+nominal.flow <- read_csv("nominal_flow_values.csv") %>%
+  mutate(capacity = round(nominal_flow_value*1.2)) %>%
+  select(-nominal_flow_value)
+  
 line.final <- power.edge.adj %>%
   rbind(power.delaunay) %>%
   mutate(geodist = distGeo(p1 = cbind(x1, y1), p2 = cbind(x2, y2))/1000) %>%
   mutate(cost_fixed = ifelse(source == "power.mst", 0, 0.1),
          cost_linear = geodist*0.01) %>%
   mutate(susceptance = 1) %>%
-  mutate(capacity = 1500) %>% # CAPACITY TBD after initial solution tested (Mega Watt)
+  left_join(nominal.flow) %>%
+  left_join(nominal.flow %>%
+              rename(node1 = node2, node2 = node1, capacity2 = capacity)) %>%
+  mutate(capacity = ifelse(is.na(capacity), capacity2, capacity)) %>%
+  mutate(capcity = ifelse(is.na(capacity), 350, capacity)) %>%
+  select(-capacity2) %>%
   filter(source == "power.mst" | geodist <= quantile(geodist, 0.5)) %>% # take min span tree or in closest 50%
   select(node1, node2, capacity, susceptance, cost_fixed, cost_linear)
-write_excel_csv(path = "../grid_edges.csv", x = line.final)
+
+
+
+write_excel_csv(path = "../grid_edges_tmp.csv", x = line.final)
 
 
 
