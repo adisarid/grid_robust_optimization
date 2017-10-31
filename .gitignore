@@ -136,3 +136,4 @@ vignettes/*.pdf
 
 # temporary test file
 tmp.py
+*.pdf
