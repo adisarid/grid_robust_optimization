@@ -302,4 +302,4 @@ extensive.failed.edges %>%
 
 # Scenario probabilities
 tibble(scenario = 1:4, probability = 0.025) %>%
-  write_excel_csv("scenario_probabilites.csv")
+  write_excel_csv("../scenario_probabilities.csv")
