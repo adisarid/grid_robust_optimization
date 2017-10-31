@@ -135,5 +135,5 @@ vignettes/*.pdf
 *.knit.md
 
 # temporary test file
-tmp.py
+tmp*.py
 *.pdf
