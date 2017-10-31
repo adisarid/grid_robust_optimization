@@ -11,7 +11,7 @@ import cplex # using cplex engine to solve flow problem
 import sys
 import csv
 
-from debug_output_specs import write_lp_file
+from debug_output_specs import *
 
 def write_sim_steps(filename, failed_edges, flow_per_stage):
     '''
@@ -32,6 +32,8 @@ def update_grid(G, failed_edges):
     Function to update the existing graph by omitting failed_edges from it and re-computing demand and generation in each component.
     Modifies the graph G (a networkx object, with custom fields 'demand', 'gen_cap' and 'generated')
     """
+    if print_debug_function_tracking:
+        print "ENTERED: update_grid()"
     # First step, go over failed edges and omit them from G
     G.remove_edges_from([edge for edge in failed_edges])
 
@@ -50,7 +52,7 @@ def update_grid(G, failed_edges):
             # need to shed some of the demand.
             shedding_factor = tot_gen_cap/tot_demand
             for node in component.node.keys():
-                G.node[node]['demand'] *= shedding_factor # lower demand so that total demand in component does not surpass the capacity in the component
+                G.node[node]['demand'] = G.node[node]['original_demand']*shedding_factor # lower demand so that total demand in component does not surpass the capacity in the component
                 G.node[node]['generated'] = G.node[node]['gen_cap'] # generating maximum in order to reach capacity
 
         # case demand is lower than total generation capacity
@@ -77,7 +79,8 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     and dicts of capacity and demand.
     Returns final state of the grid after cascading failure evolution is complete.
     """
-
+    if print_debug_function_tracking:
+        print "ENTERED: cfe()"
     # initialize the list of failed edges at each iteration
     F = dict()
     F[0] = init_fail_edges
@@ -105,10 +108,12 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     Eventually, the function returns a set of new failed edges.
     Adi, 21/06/2017.
     """
-
+    if print_debug_function_tracking:
+        print "ENTERED: grid_flow_update()"
     # First step, go over failed edges and omit them from G, rebalance components with demand and generation
     update_grid(G, failed_edges) # Each component of G will balance demand and generation capacities after this line
-
+    if print_debug_function_tracking:
+        print "Number of connected components in G = ", nx.number_connected_components(G)
     # Initialize cplex internal flow problem
     find_flow = cplex.Cplex() # create cplex instance
     find_flow.objective.set_sense(find_flow.objective.sense.minimize) # doesn't matter
@@ -159,7 +164,9 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     # Check to make sure that an optimal solution has been reached or exit otherwise
     if find_flow.solution.get_status() != 1:
         find_flow.write('problem_infeasible.lp')
-        sys.exit('Error: no optimal solution found while trying to solve flow problem. Writing into: problem_infeasible.lp')
+        print "I'm having difficulty with a flow problem - please check"
+        nx.write_gexf(G, "c:/temp/exported_grid_err.gexf")
+        sys.exit('Error: no optimal solution found while trying to solve flow problem. Writing into: problem_infeasible.lp and c:/temp/exported_grid_err.gexf')
 
     find_flow_vars = find_flow.solution.get_values()
 
