@@ -25,6 +25,8 @@ from debug_output_specs import *
 from global_definitions import line_coef_scale
 
 def build_cplex_problem():
+    if print_debug_function_tracking:
+        print "ENTERED: build_cplex_problem()"
     global dvar_pos # used as global to allow access across all functions
     global dvar_name
 
@@ -291,7 +293,8 @@ def build_cfe_constraints(current_solution, timestampstr):
     if the input timestampstr is not False then a csv file with the failed and survivde edges will be saved
 
     """
-
+    if print_debug_function_tracking:
+        print "ENTERED: build_cfe_constraints()"
     global epsilon
     global dvar_name
     global dvar_pos
