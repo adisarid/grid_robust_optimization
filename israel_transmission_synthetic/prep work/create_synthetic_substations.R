@@ -166,7 +166,12 @@ power.edge.adj <- as_edgelist(power.mst) %>%
               select(vertice.num, clust.lon, clust.lat),
             by = c("node2" = "vertice.num")) %>%
   rename(x2 = clust.lon, y2 = clust.lat) %>%
-  mutate(source = "power.mst")
+  mutate(source = "power.mst") %>%
+  mutate(node1tmp = ifelse(node1>node2, node2, node1),
+         node2tmp = ifelse(node1>node2, node1, node2)) %>%
+  select(-node1, -node2) %>%
+  rename(node1 = node1tmp, 
+         node2 = node2tmp)
 
 map5 <- map4 + 
   geom_segment(data = power.edge.adj, aes(x = x1, xend = x2, y = y1, yend = y2), size = 1, alpha = 0.7)
@@ -177,9 +182,21 @@ library("deldir")
 
 power.deldir <- deldir(x = generator.substation.data$clust.lon, y = generator.substation.data$clust.lat)
 power.delaunay <- power.deldir$delsgs %>%
-  rename(node1 = ind1,
-         node2 = ind2) %>%
-  mutate(source = "delaunay")
+  mutate(node1 = ifelse(ind1>ind2, ind2, ind1),
+         node2 = ifelse(ind1>ind2, ind1, ind2)) %>%
+  select(-ind1, -ind2) %>%
+  mutate(source = "delaunay") %>%
+  select(node1:source) %>%
+  unique() %>%
+  left_join(generator.substation.data %>%
+              select(vertice.num, clust.lon, clust.lat),
+            by = c("node1" = "vertice.num")) %>%
+  rename(x1 = clust.lon, y1 = clust.lat) %>% 
+  left_join(generator.substation.data %>%
+              select(vertice.num, clust.lon, clust.lat),
+            by = c("node2" = "vertice.num")) %>%
+  rename(x2 = clust.lon, y2 = clust.lat)
+  
 
 map6 <- map5 + 
   geom_segment(data = power.delaunay, aes(x = x1, xend = x2, y = y1, yend = y2), size = 0.5, alpha = 0.7, linetype = 2)
@@ -206,14 +223,14 @@ line.final <- power.edge.adj %>%
   left_join(nominal.flow %>%
               rename(node1 = node2, node2 = node1, capacity2 = capacity)) %>%
   mutate(capacity = ifelse(is.na(capacity), capacity2, capacity)) %>%
-  mutate(capcity = ifelse(is.na(capacity), 350, capacity)) %>%
+  mutate(capacity = ifelse(is.na(capacity), 350, capacity)) %>%
   select(-capacity2) %>%
   filter(source == "power.mst" | geodist <= quantile(geodist, 0.5)) %>% # take min span tree or in closest 50%
   select(node1, node2, capacity, susceptance, cost_fixed, cost_linear)
 
 
 
-write_excel_csv(path = "../grid_edges_tmp.csv", x = line.final)
+write_excel_csv(path = "../grid_edges.csv", x = line.final)
 
 
 

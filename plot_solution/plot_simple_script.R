@@ -152,3 +152,10 @@ sim.results %>%
   do(tmp = plot.power.step(step.character = .$source))
 
 
+# ==== create a pptx with the images ====
+library(officer)
+res_pres <- read_pptx() %>%
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_with_text(type = "body", str = "Blah 123") %>%
+  print(target = "tmp.pptx") %>%
+  invisible()

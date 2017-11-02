@@ -20,7 +20,7 @@ node_list = [node[1] for node in nodes.keys() if node[0] == 'd']
 add_nodes = [(cur_node, {'demand': nodes[('d', cur_node)],'gen_cap':nodes[('c', cur_node)], 'generated':0, 'un_sup_cost':0, 'gen_cost':0, 'original_demand': nodes[('d', cur_node)]}) for cur_node in node_list]
 G.add_nodes_from(add_nodes)
 
-edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges.keys() if edge[0] == 'H']  # FIX BUG HERE TO GET THE RIGHT LIST OF EDGES!!!!!!!
+edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges.keys() if edge[0] == 'H' and edges[edge] < 0.1] # there is some bug here. Just make sure that the file read by read_grid is only the spanning tree!!!
 add_edges = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge], 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0.001)]
 
 G.add_edges_from(add_edges)
