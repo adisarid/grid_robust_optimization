@@ -11,6 +11,7 @@ import cplex # using cplex engine to solve flow problem
 import sys
 import csv
 
+
 from debug_output_specs import *
 
 def write_sim_steps(filename, failed_edges, flow_per_stage):
@@ -46,6 +47,7 @@ def update_grid(G, failed_edges):
         tot_demand = sum([component.node[i]['original_demand'] for i in component.node.keys()])
         tot_gen_cap = sum([component.node[i]['gen_cap'] for i in component.node.keys()])
         tot_generated = sum([component.node[i]['generated'] for i in component.node.keys()])
+
         #print 'Original data for component: tot_demand=', tot_demand, 'tot_cap=', tot_gen_cap, 'tot_generated=', tot_generated
         if tot_demand > tot_gen_cap:
             # in this case, demand in the connected component is above the capacity in the component
@@ -56,19 +58,19 @@ def update_grid(G, failed_edges):
                 G.node[node]['generated'] = G.node[node]['gen_cap'] # generating maximum in order to reach capacity
 
         # case demand is lower than total generation capacity
-        elif tot_demand < tot_generated:
+        elif tot_demand <= tot_gen_cap:
             # we are generating too much and need to curtail some of the generation
-            gen_factor = tot_demand/tot_generated
-            for node in component.node.keys():
-                G.node[node]['generated'] *= gen_factor
-                #if G.node[node]['generated'] > G.node[node]['gen_cap']:
-                    #print 'Opps! error here(2), generation increased capacit. Check me'
-                    #print 'node', node, 'gen_factor', gen_factor
-        elif tot_demand > tot_generated:
-            # we are not generating enough, and we are able to increase demand (it is not bound to get us above capacity, since tot_demand < tot_gen_cap)
             gen_factor = tot_demand/tot_gen_cap
             for node in component.node.keys():
                 G.node[node]['generated'] = G.node[node]['gen_cap']*gen_factor
+                G.node[node]['demand'] = G.node[node]['original_demand']
+                #if G.node[node]['generated'] > G.node[node]['gen_cap']:
+                    #print 'Opps! error here(2), generation increased capacit. Check me'
+                    #print 'node', node, 'gen_factor', gen_factor
+
+        tot_demand = sum([G.node[i]['original_demand'] for i in component.node.keys()])
+        tot_gen_cap = sum([G.node[i]['gen_cap'] for i in component.node.keys()])
+        tot_generated = sum([G.node[i]['generated'] for i in component.node.keys()])
 
 
 def cfe(G, init_fail_edges, write_solution_file = False):
