@@ -29,7 +29,11 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     initial_failures_to_cfe = {cur_scenario: scenarios[('s', cur_scenario)] for cur_scenario in scenario_list}
 
     cfe_dict_results = {cur_scenario: cascade_simulator_aux.cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False) for cur_scenario in scenario_list}
-
+    tmpGs = {cur_scenario: cfe_dict_results[cur_scenario]['updated_grid_copy'] for cur_scenario in scenario_list}
+    #print "Starting at compute_cascade.compute_failures()",
+    unsup_demand = [scenarios[('s_pr', cur_scenario)]*sum([result_grid.node[cur_node]['original_demand']-result_grid.node[cur_node]['demand'] for cur_node in result_grid.nodes()]) for (cur_scenario, result_grid) in tmpGs.iteritems()]
+    print "Objective=", sum(unsup_demand)
+    #print "Ending at compute_cascade.compute_failures()",
     return(cfe_dict_results)
 
 
