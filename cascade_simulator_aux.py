@@ -100,7 +100,12 @@ def cfe(G, init_fail_edges, write_solution_file = False):
         tot_failed += F[i+1]
         i += 1
 
-    return({'F': F, 't':i, 'all_failed': tot_failed})
+    tmpG = G.copy()
+    # PS - I tried to compute the total loss here, but ran into a weird "An integer is required" bug. Returning the grid to compute unsupplied at a higher level.
+    #print "Started"
+    #print sum([tmpG.node[i]['demand'] for i in tmpG.nodes()])
+    #print "Finished"
+    return({'F': F, 't':i, 'all_failed': tot_failed, 'updated_grid_copy': tmpG})#, 'tot_supplied': tot_unsupplied})
 
 
 def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object = False):
