@@ -281,6 +281,12 @@ class MyLazy(LazyConstraintCallback):
             if print_debug_verbose:
                 print timestampstr, "Adding cut ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
 
+        # compute the current objective value: print status and update "incumbent solution"
+        #simulation_results = cfe_constraints['sim_failures']
+        #print 'Simulation results:', simulation_results
+        #objective_coef = self.get_objective_coefficients()
+        #objective_rlax = self.get_
+
 
 def build_cfe_constraints(current_solution, timestampstr):
     """
@@ -374,7 +380,7 @@ def build_cfe_constraints(current_solution, timestampstr):
             if print_debug_verbose:
                 print ('F', curr_non_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]], "<--", str_flag
 
-    cfe_constraints = {'positions': positions_list, 'coefficients': coefficient_list, 'rhs': rhs_list}
+    cfe_constraints = {'positions': positions_list, 'coefficients': coefficient_list, 'rhs': rhs_list, 'sim_failures': simulation_failures}
 
     return(cfe_constraints)
 
