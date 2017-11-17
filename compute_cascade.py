@@ -13,6 +13,7 @@ import networkx as nx
 import cascade_simulator_aux # for computing the cascades
 from time import gmtime, strftime, clock # for placing timestamp on debug solution files
 from global_definitions import line_coef_scale
+from global_definitions import best_incumbent
 from debug_output_specs import *
 
 def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
@@ -21,6 +22,8 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     Then the cfe algorithm is run to determine which edges should fail in each scenario
     cfe results are returned by the function as a dictionary with scenario keys for later use.
     """
+    global best_incumbent
+
     if print_debug_function_tracking:
         print "ENTERED: compute_failure()"
     init_grid = build_nx_grid(nodes, edges, current_solution, dvar_pos) # build initial grid
@@ -30,10 +33,15 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
 
     cfe_dict_results = {cur_scenario: cascade_simulator_aux.cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False) for cur_scenario in scenario_list}
     tmpGs = {cur_scenario: cfe_dict_results[cur_scenario]['updated_grid_copy'] for cur_scenario in scenario_list}
-    #print "Starting at compute_cascade.compute_failures()",
+
+    # computing the unsupplied demand (objective value) and updating best incumbent if needed
     unsup_demand = [scenarios[('s_pr', cur_scenario)]*sum([result_grid.node[cur_node]['original_demand']-result_grid.node[cur_node]['demand'] for cur_node in result_grid.nodes()]) for (cur_scenario, result_grid) in tmpGs.iteritems()]
-    print "Objective=", sum(unsup_demand)
-    #print "Ending at compute_cascade.compute_failures()",
+    best_incumbent = min(unsup_demand, best_incumbent)
+
+    # print the best incumbent for tenth cases (if tick is < 6 sec).
+    if gmtime()[5] <= 6:
+        print "Incumbent objective =", sum(unsup_demand)
+
     return(cfe_dict_results)
 
 
