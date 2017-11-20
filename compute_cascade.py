@@ -12,7 +12,7 @@
 import networkx as nx
 import cascade_simulator_aux # for computing the cascades
 from time import gmtime, strftime, clock # for placing timestamp on debug solution files
-from global_definitions import line_coef_scale
+from global_definitions import line_capacity_coef_scale
 from global_definitions import best_incumbent
 from debug_output_specs import *
 
@@ -25,7 +25,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     global best_incumbent
 
     if print_debug_function_tracking:
-        print "ENTERED: compute_failure()"
+        print "ENTERED: compute_casecade.compute_failure()"
     init_grid = build_nx_grid(nodes, edges, current_solution, dvar_pos) # build initial grid
     #print "DEBUG: Feeding into cfe algorithm (compute_cascade.compute_failed_inconsistent()) - edges:", init_grid.edges()
     scenario_list = [cur_sce[1] for cur_sce in scenarios.keys() if cur_sce[0] == 's_pr'] # get scenario list
@@ -41,6 +41,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     # print the best incumbent for tenth cases (if tick is < 6 sec).
     if gmtime()[5] <= 6:
         print "Incumbent objective =", sum(unsup_demand)
+        # consider later on to add: write incumbent solution to file.
 
     return(cfe_dict_results)
 
@@ -55,7 +56,7 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     via list comprehension of the edges and nodes.
     """
     if print_debug_function_tracking:
-        print "ENTERED: build_nx_grid()"
+        print "ENTERED: compute_casecade.build_nx_grid()"
     G = nx.Graph() # initialize empty graph
 
     # add all nodes
@@ -64,8 +65,13 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     G.add_nodes_from(add_nodes)
 
     # add all edges
+    # note an important change from the continuous case to the discrete case: the use of: current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale
+    # this means that the capacity can grow by line_capacity_coef_scale
+    # should later on be introduced as part of the input.
     edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges if edge[0] == 'c']
-    add_edges = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]]*line_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0 or current_solution[dvar_pos[('X_', cur_edge)]]> 0.01)]
+
+    # The next line introduces a bug where dvar_pos[('X_', cur_edge)] does not exist but is called for. FIX THIS!!
+    add_edges = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0 or current_solution[dvar_pos[('X_', cur_edge)]]> 0.01)]
 
     # Debugging
     #timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime()) + str(round(clock(), 3)) + ' - '
