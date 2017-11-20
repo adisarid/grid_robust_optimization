@@ -22,7 +22,7 @@ bigM = 1.0/epsilon
 
 from debug_output_specs import *
 
-from global_definitions import line_coef_scale
+from global_definitions import line_cost_coef_scale
 
 def build_cplex_problem():
     if print_debug_function_tracking:
@@ -123,8 +123,8 @@ def build_cplex_problem():
 
 
 
-        # establish new edge (only if upgrade cost > 0 otherwise this edge already exists, no need to add variable)
-        if cur_edge in [(i[1], i[2]) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]:
+        # establish new edge (only if upgrade cost > 0 otherwise this edge already exists and it is not upgradable, no need to add variable)
+        if cur_edge in [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]:
             dvar_name.append('X_' + edge_str)
             dvar_pos[('X_', cur_edge)] = len(dvar_name)-1
             dvar_obj_coef.append(0)
@@ -233,7 +233,7 @@ def build_cplex_problem():
     budget_lhs = [dvar_pos[('c', cur_edge)] for cur_edge in all_edges] + [dvar_pos[('c', cur_node)] for cur_node in all_nodes] + \
                  [dvar_pos[('Z', cur_node)] for cur_node in all_nodes if ('H', cur_node) in nodes.keys()] + \
                  [dvar_pos[('X_', (i[1], i[2]))] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
-    budget_lhs_coef = [line_coef_scale*edges[('h',) + cur_edge] for cur_edge in all_edges] + [nodes[('h', cur_node)] for cur_node in all_nodes] + \
+    budget_lhs_coef = [line_cost_coef_scale*edges[('h',) + cur_edge] for cur_edge in all_edges] + [nodes[('h', cur_node)] for cur_node in all_nodes] + \
                  [nodes[('H',cur_node)] for cur_node in all_nodes if ('H',cur_node) in nodes.keys()] + \
                  [edges[('H',)+(i[1], i[2])] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
     robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [params['C']])
@@ -300,7 +300,7 @@ def build_cfe_constraints(current_solution, timestampstr):
 
     """
     if print_debug_function_tracking:
-        print "ENTERED: build_cfe_constraints()"
+        print "ENTERED: build_problem.build_cfe_constraints()"
     global epsilon
     global dvar_name
     global dvar_pos
