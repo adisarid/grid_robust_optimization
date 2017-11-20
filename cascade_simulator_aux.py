@@ -34,7 +34,7 @@ def update_grid(G, failed_edges):
     Modifies the graph G (a networkx object, with custom fields 'demand', 'gen_cap' and 'generated')
     """
     if print_debug_function_tracking:
-        print "ENTERED: update_grid()"
+        print "ENTERED: cascade_simulator_aux.update_grid()"
     # First step, go over failed edges and omit them from G
     G.remove_edges_from([edge for edge in failed_edges])
 
@@ -82,7 +82,7 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     Returns final state of the grid after cascading failure evolution is complete.
     """
     if print_debug_function_tracking:
-        print "ENTERED: cfe()"
+        print "ENTERED: cascade_simulator_aux.cfe()"
     # initialize the list of failed edges at each iteration
     F = dict()
     F[0] = init_fail_edges
@@ -116,7 +116,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     Adi, 21/06/2017.
     """
     if print_debug_function_tracking:
-        print "ENTERED: grid_flow_update()"
+        print "ENTERED: cascade_simulator_aux.grid_flow_update()"
     # First step, go over failed edges and omit them from G, rebalance components with demand and generation
     update_grid(G, failed_edges) # Each component of G will balance demand and generation capacities after this line
     if print_debug_function_tracking:
