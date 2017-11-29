@@ -17,3 +17,6 @@ write_res_file = False # # should I write the solution to a file (when the proce
 write_lp_file = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disabled by default
 print_cfe_results = False # should I print each cfe simulation results - which edges failed and which survived?
 limit_lazy_add = -1 # should I limit the number of lazy constraints added at each iteration. Use -1 for unlimited.
+incumbent_display_frequency = 12 # 6 = 10% cases, 60 = 100% cases (represent the seconds from tick function when reached)
+time_spent_total = 0
+time_spent_cascade_sim = 0
