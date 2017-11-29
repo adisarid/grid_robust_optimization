@@ -14,7 +14,7 @@ from cplex.callbacks import LazyConstraintCallback # import class for lazy callb
 import compute_cascade # needed for the lazy call backs algorithm
 from read_grid import nodes, edges, scenarios, params # using global variables for easy reading into lazy callback class
 from export_results import write_names_values # imported for writing callback information - debugging purpuses
-from time import gmtime, strftime, clock # for placing timestamp on debug solution files
+from time import gmtime, strftime, clock, time # for placing timestamp on debug solution files, and checking run time
 import csv
 
 epsilon = 1e-3
@@ -260,6 +260,10 @@ class MyLazy(LazyConstraintCallback):
         global print_debug
         global print_cfe_results
 
+        # The following should work in CPLEX version > 12.6
+        #print self.get_solution_source()
+
+
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
         current_solution = self.get_values()
@@ -272,7 +276,11 @@ class MyLazy(LazyConstraintCallback):
         if not print_cfe_results==False:
             print_cfe_results = timestampstr
 
+
         cfe_constraints = build_cfe_constraints(current_solution, timestampstr = print_cfe_results)
+
+
+
 
         # Adding lazy constraints one by one - currently don't know how to do this in batch
         for i in xrange(len(cfe_constraints['positions'])):
@@ -280,12 +288,6 @@ class MyLazy(LazyConstraintCallback):
             self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i])
             if print_debug_verbose:
                 print timestampstr, "Adding cut ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
-
-        # compute the current objective value: print status and update "incumbent solution"
-        #simulation_results = cfe_constraints['sim_failures']
-        #print 'Simulation results:', simulation_results
-        #objective_coef = self.get_objective_coefficients()
-        #objective_rlax = self.get_
 
 
 def build_cfe_constraints(current_solution, timestampstr):
