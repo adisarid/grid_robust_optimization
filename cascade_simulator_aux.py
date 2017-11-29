@@ -10,7 +10,7 @@ import networkx as nx # for using graph representation
 import cplex # using cplex engine to solve flow problem
 import sys
 import csv
-
+from time import time
 
 from debug_output_specs import *
 
@@ -51,8 +51,11 @@ def update_grid(G, failed_edges):
         #print 'Original data for component: tot_demand=', tot_demand, 'tot_cap=', tot_gen_cap, 'tot_generated=', tot_generated
         if tot_demand > tot_gen_cap:
             # in this case, demand in the connected component is above the capacity in the component
-            # need to shed some of the demand.
-            shedding_factor = tot_gen_cap/tot_demand
+            # need to shed some of the demand. Make sure there is no devision by 0
+            if tot_demand == 0:
+                shedding_factor = 0
+            else:
+                shedding_factor = tot_gen_cap/tot_demand
             for node in component.node.keys():
                 G.node[node]['demand'] = G.node[node]['original_demand']*shedding_factor # lower demand so that total demand in component does not surpass the capacity in the component
                 G.node[node]['generated'] = G.node[node]['gen_cap'] # generating maximum in order to reach capacity
@@ -60,7 +63,11 @@ def update_grid(G, failed_edges):
         # case demand is lower than total generation capacity
         elif tot_demand <= tot_gen_cap:
             # we are generating too much and need to curtail some of the generation
-            gen_factor = tot_demand/tot_gen_cap
+            # make sure that there is no division by 0
+            if tot_gen_cap == 0:
+                gen_factor = 0
+            else:
+                gen_factor = tot_demand/tot_gen_cap
             for node in component.node.keys():
                 G.node[node]['generated'] = G.node[node]['gen_cap']*gen_factor
                 G.node[node]['demand'] = G.node[node]['original_demand']
@@ -81,6 +88,7 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     and dicts of capacity and demand.
     Returns final state of the grid after cascading failure evolution is complete.
     """
+
     if print_debug_function_tracking:
         print "ENTERED: cascade_simulator_aux.cfe()"
     # initialize the list of failed edges at each iteration
@@ -105,6 +113,8 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     #print "Started"
     #print sum([tmpG.node[i]['demand'] for i in tmpG.nodes()])
     #print "Finished"
+
+    # return computed values and exit function
     return({'F': F, 't':i, 'all_failed': tot_failed, 'updated_grid_copy': tmpG})#, 'tot_supplied': tot_unsupplied})
 
 
