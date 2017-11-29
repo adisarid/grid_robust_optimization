@@ -23,6 +23,8 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     cfe results are returned by the function as a dictionary with scenario keys for later use.
     """
     global best_incumbent
+    global time_spent_cascade_sim
+    global time_spent_total
 
     if print_debug_function_tracking:
         print "ENTERED: compute_casecade.compute_failure()"
@@ -31,16 +33,25 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     scenario_list = [cur_sce[1] for cur_sce in scenarios.keys() if cur_sce[0] == 's_pr'] # get scenario list
     initial_failures_to_cfe = {cur_scenario: scenarios[('s', cur_scenario)] for cur_scenario in scenario_list}
 
+    cfe_time_start = clock() # measure time spent on cascade simulation
+    # run the cfe
     cfe_dict_results = {cur_scenario: cascade_simulator_aux.cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False) for cur_scenario in scenario_list}
+    # finish up time measurement
+    cfe_time_total = clock() - cfe_time_start
+    time_spent_cascade_sim += cfe_time_total
+
     tmpGs = {cur_scenario: cfe_dict_results[cur_scenario]['updated_grid_copy'] for cur_scenario in scenario_list}
 
     # computing the unsupplied demand (objective value) and updating best incumbent if needed
-    unsup_demand = [scenarios[('s_pr', cur_scenario)]*sum([result_grid.node[cur_node]['original_demand']-result_grid.node[cur_node]['demand'] for cur_node in result_grid.nodes()]) for (cur_scenario, result_grid) in tmpGs.iteritems()]
-    best_incumbent = min(unsup_demand, best_incumbent)
+    sup_demand = [scenarios[('s_pr', cur_scenario)]*sum([result_grid.node[cur_node]['demand'] for cur_node in result_grid.nodes()]) for (cur_scenario, result_grid) in tmpGs.iteritems()]
+    best_incumbent = max(sum(sup_demand), best_incumbent)
 
     # print the best incumbent for tenth cases (if tick is < 6 sec).
-    if gmtime()[5] <= 6:
-        print "Incumbent objective =", sum(unsup_demand)
+    if gmtime()[5] <= incumbent_display_frequency:
+        print "Current solution =", sum(sup_demand), "Incumbent objective =", best_incumbent
+        time_spent_total = clock()
+        print "Time spent on cascade simulator:", round(time_spent_cascade_sim), "Total time:", round(time_spent_total), "   ", round(time_spent_cascade_sim/time_spent_total*100), "% on simulator"
+        print "   Node  Left     Objective  IInf  Best Integer    Cuts/Bound    ItCnt     Gap         Variable B NodeID Parent  Depth"
         # consider later on to add: write incumbent solution to file.
 
     return(cfe_dict_results)
@@ -70,8 +81,8 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     # should later on be introduced as part of the input.
     edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges if edge[0] == 'c']
 
-    # The next line introduces a bug where dvar_pos[('X_', cur_edge)] does not exist but is called for. FIX THIS!!
-    add_edges = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0 or current_solution[dvar_pos[('X_', cur_edge)]]> 0.01)]
+    add_edges_1 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0)]
+    add_edges_2 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (('X_', cur_edge) in dvar_pos.keys()) if (current_solution[dvar_pos[('X_', cur_edge)]]> 0.01)]
 
     # Debugging
     #timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime()) + str(round(clock(), 3)) + ' - '
@@ -79,7 +90,8 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     # Check if X are installed here
     # installed_edges = {('X_', cur_edge): current_solution[dvar_pos[('X_', cur_edge)]> 0.01] for cur_edge in edge_list}
 
-    G.add_edges_from(add_edges)
+    G.add_edges_from(add_edges_1)
+    G.add_edges_from(add_edges_2)
 
     return(G)
 
