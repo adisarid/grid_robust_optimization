@@ -25,7 +25,7 @@ import export_results # export solution results into csv file for later handling
 # using global variables for easy reading into lazy callback class
 from read_grid import nodes, edges, scenarios, params
 
-from time import gmtime, strftime, clock
+from time import gmtime, strftime, clock, time
 timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
 
 # DEBUG PURPOSES - output to text file instead of screen:
@@ -48,7 +48,9 @@ if print_debug:
 
 robust_opt_cplex.register_callback(build_problem.MyLazy) # register the lazy callback
 
+time_spent_total = clock() # initialize solving time
 robust_opt_cplex.solve()  #solve the model
+
 print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
 # the following line prints the corresponding status string
 print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
