@@ -48,9 +48,8 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
 
     # print the best incumbent for tenth cases (if tick is < 6 sec).
     if gmtime()[5] <= incumbent_display_frequency:
-        print "Current solution =", sum(sup_demand), "Incumbent objective =", best_incumbent
         time_spent_total = clock()
-        print "Time spent on cascade simulator:", round(time_spent_cascade_sim), "Total time:", round(time_spent_total), "   ", round(time_spent_cascade_sim/time_spent_total*100), "% on simulator"
+        print "Curr sol=", sum(sup_demand), "Incumb=", best_incumbent, "Time on sim=", round(time_spent_cascade_sim), "Tot time", round(time_spent_total), "(", round(time_spent_cascade_sim/time_spent_total*100), "%) on sim"
         print "   Node  Left     Objective  IInf  Best Integer    Cuts/Bound    ItCnt     Gap         Variable B NodeID Parent  Depth"
         # consider later on to add: write incumbent solution to file.
 
