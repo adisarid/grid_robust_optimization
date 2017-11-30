@@ -43,12 +43,13 @@ time_spent_cascade_sim = 0 # total time spent on cascade simulator
 
 
 
-# ****************************************************
-# Define global variables related to global parameters
-# ****************************************************
+# ******************************************************************
+# Define global variables related to global parameters and callbacks
+# ******************************************************************
 instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\case30\\' #adi_simple2_discrete\\'
 line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
 line_capacity_coef_scale = 10 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
+best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
 incumbent_solution_from_lazy = [] # incumbent solution
 epsilon = 1e-3
@@ -80,15 +81,15 @@ def main_program():
     params = read_additional_param(instance_location + 'additional_params.csv')
 
     # build problem
-    build_results = build_problem.build_cplex_problem()
+    build_results = build_cplex_problem()
     robust_opt_cplex = build_results['cplex_problem']
     dvar_pos = build_results['cplex_location_dictionary'] # useful for debugging
 
     if print_debug:
         robust_opt_cplex.write("c:/temp/grid_cascade_output/tmp_robust_lp.lp")
 
-    robust_opt_cplex.register_callback(build_problem.MyLazy) # register the lazy callback
-    robust_opt_cplex.register_callback(incumbent_heuristic.IncumbentHeuristic)
+    robust_opt_cplex.register_callback(MyLazy) # register the lazy callback
+    robust_opt_cplex.register_callback(IncumbentHeuristic)
 
     time_spent_total = clock() # initialize solving time
     robust_opt_cplex.solve()  #solve the model
@@ -476,8 +477,6 @@ class MyLazy(LazyConstraintCallback):
 
         # The following should work in CPLEX version > 12.6
         #print self.get_solution_source()
-        run_heuristic_callback = True
-        print "build_problem.MyLazy(), run_heuristic_callback=", run_heuristic_callback
 
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
@@ -526,7 +525,7 @@ def build_cfe_constraints(current_solution, timestampstr):
 
 
     # build new grid based on solution and return the inconsistent failures
-    simulation_failures = compute_cascade.compute_failures(nodes, edges, scenarios, current_solution, dvar_pos)
+    simulation_failures = compute_failures(nodes, edges, scenarios, current_solution, dvar_pos)
     if not timestampstr == False:
         # print simlation results as a file with timestampstr in the filename
         current_failures = [[sce, edge_failed[0], edge_failed[1]] for sce in simulation_failures.keys() for edge_failed in simulation_failures[sce]['all_failed']]
@@ -849,7 +848,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
 
     cfe_time_start = clock() # measure time spent on cascade simulation
     # run the cfe
-    cfe_dict_results = {cur_scenario: cascade_simulator_aux.cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False) for cur_scenario in scenario_list}
+    cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False) for cur_scenario in scenario_list}
     # finish up time measurement
     cfe_time_total = clock() - cfe_time_start
     time_spent_cascade_sim += cfe_time_total
@@ -862,8 +861,6 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
         best_incumbent = sum(sup_demand) # update best incumbent solution
         run_heuristic_callback = True
         incumbent_solution_from_lazy = current_solution
-        print "compute_cascade.compute_failures(), run_heuristic_callback = True"
-
 
     # print the best incumbent for tenth cases (if tick is < 6 sec).
     import random
@@ -932,9 +929,13 @@ class IncumbentHeuristic(HeuristicCallback):
             print "HEURISTIC CALLBACK INITIATED!!!"
             run_heuristic_callback = False # deactivate the heuristic callback flag until lazy finds a better solution
 
+
+
+
+
 # ****************************************************
 # *************** Run the program ********************
 # ****************************************************
 
-if __name__ == '__main_program':
+if __name__ == '__main__':
     main_program()
