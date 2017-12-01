@@ -12,9 +12,9 @@
 #-------------------------------------------------------------------------------
 
 
-# ********************
-# Import relevant libs
-# ********************
+# ************************************************
+# ********* Import relevant libraries ************
+# ************************************************
 import cplex
 from cplex.callbacks import LazyConstraintCallback # import class for lazy callbacks
 from cplex.callbacks import HeuristicCallback
@@ -51,7 +51,7 @@ line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity 
 line_capacity_coef_scale = 10 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
-incumbent_solution_from_lazy = [] # incumbent solution
+incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
 epsilon = 1e-3
 bigM = 1.0/epsilon
 
@@ -860,7 +860,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     if sum(sup_demand) > best_incumbent:
         best_incumbent = sum(sup_demand) # update best incumbent solution
         run_heuristic_callback = True
-        incumbent_solution_from_lazy = current_solution
+        incumbent_solution_from_lazy = {'current_solution': current_solution, 'simulation_results': cfe_dict_results}
 
     # print the best incumbent for tenth cases (if tick is < 6 sec).
     import random
@@ -918,15 +918,31 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
 class IncumbentHeuristic(HeuristicCallback):
     def __call__(self):
         global run_heuristic_callback
-        print"incumbent_heuristic.IncumbentHeuristic(), run_heuristic_callback=", run_heuristic_callback
         if run_heuristic_callback:
-            #feas      = self.get_feasibilities()
-            #vars = []
-            #for j in range(len(feas)):
-            #    if feas[j] == self.feasibility_status.feasible:
-            #        vars.append(j)
-            #self.set_solution([vars, [0.0] * len(vars)])  # <--- I think that this is the "key line" find out how "set_solution" works.
-            print "HEURISTIC CALLBACK INITIATED!!!"
+            # start building the heuristic solution from current solution (incumbent_solution_from_lazy)
+            # the infrastructure part:
+            heuristic_solution_var_infra = [pos for name, pos in dvar_pos.iteritems() if name[0] in ['X_', 'c']]
+            heuristic_solution_val_infra = [incumbent_solution_from_lazy['current_solution'][i] for i in heuristic_solution_var_infra]
+
+            # the failures/non-failures part:
+            # extract all failed equivalent to keys of the dvar_pos
+            all_failed_keys = [('F', cur_edge, cur_scenario) for cur_scenario in incumbent_solution_from_lazy['simulation_results'].keys() for cur_edge in incumbent_solution_from_lazy['simulation_results'][cur_scenario]['all_failed']]
+            heuristic_solution_failures = [[pos, (name in all_failed_keys)*1] for name, pos in dvar_pos.iteritems() if name[0]=='F']
+            heuristic_sol_var_fail = [i[0] for i in heuristic_solution_failures]
+            heuristic_sol_val_fail = [i[1] for i in heuristic_solution_failures]
+
+            # prep for insertion into the cplex
+            heuristic_vars = heuristic_solution_var_infra + heuristic_sol_var_fail
+            heuristic_vals = map(round, heuristic_solution_val_infra + heuristic_sol_val_fail)
+
+            # insert into cplex
+            # From linke: https://www.ibm.com/support/knowledgecenter/SSSA5P_12.5.1/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.HeuristicCallback-class.html#set_solution
+            # "Variables whose indices are not specified remain unchanged."
+            # This means that I must solve the problem completely and feed in the theta and flow variables
+            # otherwise this solution is not feasible (and probably that's why it isn't inserted).
+            # FIX HERE!!!!
+            self.set_solution([heuristic_vars, heuristic_vals], objective_value = best_incumbent)
+
             run_heuristic_callback = False # deactivate the heuristic callback flag until lazy finds a better solution
 
 
