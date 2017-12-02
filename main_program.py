@@ -960,11 +960,18 @@ class IncumbentHeuristic(HeuristicCallback):
             # prep for insertion into the cplex
             heuristic_vars = heuristic_solution_var_infra + heuristic_sol_var_fail
             heuristic_vals = map(round, heuristic_solution_val_infra + heuristic_sol_val_fail)
+            heuristic_lin_expr = [[[cur_var], [1.0]] for cur_var in heuristic_vars]
+            N_preset = len(heuristic_vars)
 
             # create a new problem, equivalent to the main problem:
             sub_problem_heuristic = create_cplex_object()
 
-            # insert into cplex
+            # add constraints to preset infrastructure values:
+            sub_problem_heuristic.linear_constraints.add(lin_expr = heuristic_lin_expr, senses = "E"*N_preset, rhs = heuristic_vals)
+
+            # find sub problem's solution
+
+            # insert solution into cplex
             # From linke: https://www.ibm.com/support/knowledgecenter/SSSA5P_12.5.1/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.HeuristicCallback-class.html#set_solution
             # "Variables whose indices are not specified remain unchanged."
             # This means that I must solve the problem completely and feed in the theta and flow variables
