@@ -238,6 +238,10 @@ def build_cplex_problem():
         print "ENTERED: build_cplex_problem()"
     global dvar_pos # used as global to allow access across all functions
     global dvar_name
+    global dvar_obj_coef
+    global dvar_lb
+    global dvar_ub
+    global dvar_type
 
     # initialize variable vector with variable name
     dvar_name = []
@@ -246,6 +250,11 @@ def build_cplex_problem():
     dvar_lb = []
     dvar_ub = []
     dvar_type = []
+
+    # initialize lists: nodes, edges, scenarios
+    global all_edges
+    global all_nodes
+    global all_scenarios
 
     # epsilon
     global epsilon # depending on grid size, this constant can take various values 1e-10 is probably small enough for any practical situation
@@ -341,7 +350,22 @@ def build_cplex_problem():
             dvar_ub.append(1)
             dvar_type.append('B')
 
+    # create cplex object based on dvar_pos, dvar_obj_coef, dvar_lb, dvar_ub, dvar_type
+    robust_opt = create_cplex_object()
 
+    # Finished defining the main problem - returning cplex object:
+    return {'cplex_problem': robust_opt, 'cplex_location_dictionary': dvar_pos}
+
+
+
+def create_cplex_object():
+    """
+    Create cplex object, along with all variables, constraints, objective, ets.
+    Based on dvar_pos, dvar_obj_coef, dvar_lb, dvar_ub, dvar_type, dvar_name
+    This is a service function called by build_cplex_problem, and also by the Heuristic callback
+    """
+    if print_debug_function_tracking:
+        print "ENTERED: create_cplex_object()"
     # initialize cplex object
     robust_opt = cplex.Cplex()
     robust_opt.objective.set_sense(robust_opt.objective.sense.maximize) # maximize supplied energy "=" minimize expected loss of load
@@ -447,8 +471,10 @@ def build_cplex_problem():
                  [edges[('H',)+(i[1], i[2])] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
     robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [params['C']])
 
-    # Finished defining the main problem - returning cplex object:
-    return {'cplex_problem': robust_opt, 'cplex_location_dictionary': dvar_pos}
+    return robust_opt
+
+
+
 
 
 # ****************************************************
@@ -934,6 +960,9 @@ class IncumbentHeuristic(HeuristicCallback):
             # prep for insertion into the cplex
             heuristic_vars = heuristic_solution_var_infra + heuristic_sol_var_fail
             heuristic_vals = map(round, heuristic_solution_val_infra + heuristic_sol_val_fail)
+
+            # create a new problem, equivalent to the main problem:
+            sub_problem_heuristic = create_cplex_object()
 
             # insert into cplex
             # From linke: https://www.ibm.com/support/knowledgecenter/SSSA5P_12.5.1/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.HeuristicCallback-class.html#set_solution
