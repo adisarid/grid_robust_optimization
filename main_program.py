@@ -33,7 +33,7 @@ print_debug = False # should I print the output to a file?
 print_debug_verbose = False # should I print out verbose steps of lazy constraints?
 print_debug_function_tracking = False # should I print location when entering each subroutine?
 write_mid_run_res_files = False # should I write the lazy iterations' solutions
-write_res_file = False # # should I write the solution to a file (when the process completes)
+write_res_file = True # # should I write the solution to a file (when the process completes)
 write_lp_file = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disabled by default
 print_cfe_results = False # should I print each cfe simulation results - which edges failed and which survived?
 limit_lazy_add = -1 # should I limit the number of lazy constraints added at each iteration. Use -1 for unlimited.
@@ -54,7 +54,8 @@ run_heuristic_callback = False # default is not to run heuristic callback until 
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
 epsilon = 1e-3
 bigM = 1.0/epsilon
-
+epgap = 0.005 # optimality gap target, e.g., 0.01 = 1%
+totruntime = 0.5*60*60 # in seconds
 
 
 
@@ -92,6 +93,9 @@ def main_program():
     robust_opt_cplex.register_callback(IncumbentHeuristic)
 
     time_spent_total = clock() # initialize solving time
+    robust_opt_cplex.parameters.mip.tolerances.mipgap.set(epgap) # set target optimality gap
+    robust_opt_cplex.parameters.timelimit.set(totruntime) # set run time limit
+
     robust_opt_cplex.solve()  #solve the model
 
     print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
@@ -121,7 +125,7 @@ def main_program():
 
         if write_res_file:
             timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
-            export_results.write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
+            write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
 
 
     # Cancel print to file (initiated for debug purposes).
@@ -969,15 +973,23 @@ class IncumbentHeuristic(HeuristicCallback):
             # add constraints to preset infrastructure values:
             sub_problem_heuristic.linear_constraints.add(lin_expr = heuristic_lin_expr, senses = "E"*N_preset, rhs = heuristic_vals)
 
-            # find sub problem's solution
+            # supress subproblem's output stream
+            sub_problem_heuristic.set_log_stream(None)
+            sub_problem_heuristic.set_results_stream(None)
 
-            # insert solution into cplex
+            # find sub problem's solution
+            sub_problem_heuristic.solve()
+
+            heuristic_solution_push = sub_problem_heuristic.solution.get_values()
+            heuristic_solution_objective = sub_problem_heuristic.solution.get_objective_value()
+
+            # note about inserting solutions into cplex using heuristic callback
             # From linke: https://www.ibm.com/support/knowledgecenter/SSSA5P_12.5.1/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.HeuristicCallback-class.html#set_solution
             # "Variables whose indices are not specified remain unchanged."
             # This means that I must solve the problem completely and feed in the theta and flow variables
             # otherwise this solution is not feasible (and probably that's why it isn't inserted).
-            # FIX HERE!!!!
-            self.set_solution([heuristic_vars, heuristic_vals], objective_value = best_incumbent)
+
+            self.set_solution([range(len(heuristic_solution_push)), heuristic_solution_push], objective_value = heuristic_solution_objective)
 
             run_heuristic_callback = False # deactivate the heuristic callback flag until lazy finds a better solution
 
