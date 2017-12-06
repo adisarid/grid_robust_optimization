@@ -525,19 +525,8 @@ class MyLazy(LazyConstraintCallback):
 
         cfe_constraints = build_cfe_constraints(current_solution, timestampstr = print_cfe_results)
 
-        #batch_constraints = [[cfe_constraints['positions'][i],cfe_constraints['coefficients'][i]] for i in xrange(len(cfe_constraints['positions']))]
-        #batch_sense = "L"*len(batch_constraints)
-        #batch_rhs = [cfe_constraints['rhs'][i] for i in xrange(len(cfe_constraints['rhs']))]
+        [self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i]) for i in xrange(len(cfe_constraints['positions']))]
 
-
-        # self.add(batch_constraints, batch_sense, batch_rhs) # this method doesn't work
-
-        # Adding lazy constraints one by one - currently don't know how to do this in batch
-        for i in xrange(len(cfe_constraints['positions'])):
-            curr_cut_debug = [str(cfe_constraints['coefficients'][i][j]) + '*' + dvar_name[cfe_constraints['positions'][i][j]] for j in xrange(len(cfe_constraints['positions'][i]))]
-            self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i])
-            if print_debug_verbose:
-                print timestampstr, "Adding cut ", curr_cut_debug, "<=", cfe_constraints['rhs'][i]
 
 def build_cfe_constraints(current_solution, timestampstr):
     """
@@ -764,6 +753,11 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     Eventually, the function returns a set of new failed edges.
     Adi, 21/06/2017.
     """
+
+    # INSIGHT (6/12/2017): Use the existing model previous_find_flow instead of rebuilding the entire model!
+    # Then, use previous_find_flow.linear_constraints.delete
+    # and previous_find_flow.variables.delete
+    # to delete the unnecessary variables and constraints, then call solve() again
     if print_debug_function_tracking:
         print "ENTERED: cascade_simulator_aux.grid_flow_update()"
     # First step, go over failed edges and omit them from G, rebalance components with demand and generation
@@ -816,13 +810,14 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     # Add a warm start from the previous_find_flow, if exists
     # I'm not sure this helps accelerate the process. Not noticeable anyway.
     # Should probably be better if I use the primal<->dual suggestion by Tal
-    if previous_find_flow != None:
-        previous_names = previous_find_flow.variables.get_names()
-        previous_values = previous_find_flow.solution.get_values()
-        tmp_prev_sol = {previous_names[i]:previous_values[i] for i in range(len(previous_names))}
-        initial_vals = [tmp_prev_sol[curr_var] for curr_var in find_flow.variables.get_names()]
-        #print [find_flow.variables.get_names(),initial_vals]
-        find_flow.MIP_starts.add([find_flow.variables.get_names(),initial_vals], find_flow.MIP_starts.effort_level.repair)
+    #if previous_find_flow != None:
+    #    previous_names = previous_find_flow.variables.get_names()
+    #    previous_values = previous_find_flow.solution.get_values()
+    #    tmp_prev_sol = {previous_names[i]:previous_values[i] for i in range(len(previous_names))}
+    #    initial_vals = [tmp_prev_sol[curr_var] for curr_var in find_flow.variables.get_names()]
+    #    #print [find_flow.variables.get_names(),initial_vals]
+    #    find_flow.MIP_starts.add([find_flow.variables.get_names(),initial_vals], find_flow.MIP_starts.effort_level.repair)
+    #    find_flow.solution.
 
 
 
