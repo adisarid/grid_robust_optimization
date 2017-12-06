@@ -54,7 +54,7 @@ run_heuristic_callback = False # default is not to run heuristic callback until 
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
 epsilon = 1e-3
 bigM = 1.0/epsilon
-epgap = 0.005 # optimality gap target, e.g., 0.01 = 1%
+epgap = 0.01/100 # optimality gap target, e.g., 0.01 = 1%
 totruntime = 0.5*60*60 # in seconds
 
 
@@ -95,6 +95,9 @@ def main_program():
     time_spent_total = clock() # initialize solving time
     robust_opt_cplex.parameters.mip.tolerances.mipgap.set(epgap) # set target optimality gap
     robust_opt_cplex.parameters.timelimit.set(totruntime) # set run time limit
+
+    # enable multithread search
+    robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
 
     robust_opt_cplex.solve()  #solve the model
 
@@ -522,6 +525,13 @@ class MyLazy(LazyConstraintCallback):
 
         cfe_constraints = build_cfe_constraints(current_solution, timestampstr = print_cfe_results)
 
+        #batch_constraints = [[cfe_constraints['positions'][i],cfe_constraints['coefficients'][i]] for i in xrange(len(cfe_constraints['positions']))]
+        #batch_sense = "L"*len(batch_constraints)
+        #batch_rhs = [cfe_constraints['rhs'][i] for i in xrange(len(cfe_constraints['rhs']))]
+
+
+        # self.add(batch_constraints, batch_sense, batch_rhs) # this method doesn't work
+
         # Adding lazy constraints one by one - currently don't know how to do this in batch
         for i in xrange(len(cfe_constraints['positions'])):
             curr_cut_debug = [str(cfe_constraints['coefficients'][i][j]) + '*' + dvar_name[cfe_constraints['positions'][i][j]] for j in xrange(len(cfe_constraints['positions'][i]))]
@@ -729,9 +739,10 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     #current_flow = compute_flow(G)
     # loop
     i = 0
+    tmp_grid_flow_update = {'cplex_object': None} # initialize an empty object
     while F[i]:  # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
-        tmp_grid_flow_update = grid_flow_update(G, F[i], False, False)
+        tmp_grid_flow_update = grid_flow_update(G, F[i], False, True, tmp_grid_flow_update['cplex_object'])
         F[i+1] =  tmp_grid_flow_update['failed_edges']
         tot_failed += F[i+1]
         i += 1
@@ -746,7 +757,7 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     return({'F': F, 't':i, 'all_failed': tot_failed, 'updated_grid_copy': tmpG})#, 'tot_supplied': tot_unsupplied})
 
 
-def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object = False):
+def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object = False, previous_find_flow = None):
     """
     The following function modifies G after failure of edges in failed_edges,
     After which the function re-computes the flows, demand, and supply using CPLEX engine
@@ -801,6 +812,19 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     find_flow.set_error_stream(None)
     find_flow.set_warning_stream(None)
     find_flow.set_results_stream(None) #Enabling by argument as file name, i.e., set_results_stream('results_stream.txt')
+
+    # Add a warm start from the previous_find_flow, if exists
+    # I'm not sure this helps accelerate the process. Not noticeable anyway.
+    # Should probably be better if I use the primal<->dual suggestion by Tal
+    if previous_find_flow != None:
+        previous_names = previous_find_flow.variables.get_names()
+        previous_values = previous_find_flow.solution.get_values()
+        tmp_prev_sol = {previous_names[i]:previous_values[i] for i in range(len(previous_names))}
+        initial_vals = [tmp_prev_sol[curr_var] for curr_var in find_flow.variables.get_names()]
+        #print [find_flow.variables.get_names(),initial_vals]
+        find_flow.MIP_starts.add([find_flow.variables.get_names(),initial_vals], find_flow.MIP_starts.effort_level.repair)
+
+
 
     # Solve problem
     find_flow.set_problem_type(find_flow.problem_type.LP) # This is a regular linear problem, avoid code 1017 error.
