@@ -764,61 +764,62 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     update_grid(G, failed_edges) # Each component of G will balance demand and generation capacities after this line
     if print_debug_function_tracking:
         print "Number of connected components in G = ", nx.number_connected_components(G)
-    # Initialize cplex internal flow problem
-    find_flow = cplex.Cplex() # create cplex instance
-    find_flow.objective.set_sense(find_flow.objective.sense.minimize) # doesn't matter
 
-    # Initialize decision variables (demand, supply, theta, and flow)
-    dvar_pos_flow = dict() # position of variable
-    counter = 0
+    # Initialize cplex internal flow problem if does not exist already
+    if previous_find_flow == None:
+        find_flow = cplex.Cplex() # create cplex instance
+        find_flow.objective.set_sense(find_flow.objective.sense.minimize) # doesn't matter
 
-    # define flow variables (continuous unbounded)
-    obj = [0]*len(G.edges())
-    types = 'C'*len(G.edges())
-    lb = [-1e20]*len(G.edges())
-    ub = [1e20]*len(G.edges())
-    names = ['f' + str(curr_edge) for curr_edge in sorted_edges(G.edges())]
-    dvar_pos_flow.update({('f', tuple(sorted(G.edges()[i]))):i+counter for i in range(len(G.edges()))})
-    find_flow.variables.add(obj = obj, types = types, lb = lb, ub = ub, names = names)
-    counter += len(dvar_pos_flow)
+        # Initialize decision variables (demand, supply, theta, and flow)
+        dvar_pos_flow = dict() # position of variable
+        counter = 0
 
-    # define theta variables (continouous unbounded)
-    names = ['theta' + str(curr_node) for curr_node in G.nodes()]
-    num_nodes = len(G.nodes())
-    dvar_pos_flow.update({('theta', G.nodes()[i]):i+counter for i in range(len(G.nodes()))})
-    find_flow.variables.add(obj = [0]*num_nodes, types = 'C'*num_nodes, lb = [-1e20]*num_nodes, ub = [1e20]*num_nodes, names = names)
+        # define flow variables (continuous unbounded)
+        obj = [0]*len(G.edges())
+        types = 'C'*len(G.edges())
+        lb = [-1e20]*len(G.edges())
+        ub = [1e20]*len(G.edges())
+        names = ['f' + str(curr_edge) for curr_edge in sorted_edges(G.edges())]
+        dvar_pos_flow.update({('f', tuple(sorted(G.edges()[i]))):i+counter for i in range(len(G.edges()))})
+        find_flow.variables.add(obj = obj, types = types, lb = lb, ub = ub, names = names)
+        counter += len(dvar_pos_flow)
 
-    # Add phase angle (theta) flow constraints: theta_i-theta_j-x_{ij}f_{ij} = 0
-    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('f', curr_edge)]], [1.0, -1.0, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]] for curr_edge in sorted_edges(G.edges())]
-    find_flow.linear_constraints.add(lin_expr = phase_constraints, senses = "E"*len(phase_constraints), rhs = [0]*len(phase_constraints))
+        # define theta variables (continouous unbounded)
+        names = ['theta' + str(curr_node) for curr_node in G.nodes()]
+        num_nodes = len(G.nodes())
+        dvar_pos_flow.update({('theta', G.nodes()[i]):i+counter for i in range(len(G.nodes()))})
+        find_flow.variables.add(obj = [0]*num_nodes, types = 'C'*num_nodes, lb = [-1e20]*num_nodes, ub = [1e20]*num_nodes, names = names)
 
-    # Add general flow constraints. formation is: incoming edges - outgoing edges + generation
-    flow_conservation = [[[dvar_pos_flow[('f', edge)] for edge in get_associated_edges(node, G.edges())['in']] + [dvar_pos_flow[('f', edge)] for edge in get_associated_edges(node, G.edges())['out']], \
-                          [1 for edge in get_associated_edges(node, G.edges())['in']] + [-1 for edge in get_associated_edges(node, G.edges())['out']]] for node in G.nodes()]
-    flow_conservation_rhs = [G.node[curr_node]['demand']-G.node[curr_node]['generated'] for curr_node in G.nodes()]
-    # clean up a bit for "empty" constraints
-    flow_conservation_rhs = [flow_conservation_rhs[i] for i in range(len(flow_conservation_rhs)) if flow_conservation[i] != [[],[]]]
-    flow_conservation = [const for const in flow_conservation if const != [[],[]]]
-    find_flow.linear_constraints.add(lin_expr=flow_conservation, senses = "E"*len(flow_conservation), rhs = flow_conservation_rhs)
+        # Add phase angle (theta) flow constraints: theta_i-theta_j-x_{ij}f_{ij} = 0
+        phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('f', curr_edge)]], [1.0, -1.0, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]] for curr_edge in sorted_edges(G.edges())]
+        phase_constraints_names = ['c_f' + str(curr_edge) for curr_edge in sorted_edges(G.edges())]
+        find_flow.linear_constraints.add(lin_expr = phase_constraints, senses = "E"*len(phase_constraints), rhs = [0]*len(phase_constraints), names = phase_constraints_names)
 
-    # Suppress cplex messages
-    find_flow.set_log_stream(None)
-    find_flow.set_error_stream(None)
-    find_flow.set_warning_stream(None)
-    find_flow.set_results_stream(None) #Enabling by argument as file name, i.e., set_results_stream('results_stream.txt')
+        # Add general flow constraints. formation is: incoming edges - outgoing edges + generation
+        flow_conservation = [[[dvar_pos_flow[('f', edge)] for edge in get_associated_edges(node, G.edges())['in']] + [dvar_pos_flow[('f', edge)] for edge in get_associated_edges(node, G.edges())['out']], \
+                              [1 for edge in get_associated_edges(node, G.edges())['in']] + [-1 for edge in get_associated_edges(node, G.edges())['out']]] for node in G.nodes()]
+        flow_conservation_rhs = [G.node[curr_node]['demand']-G.node[curr_node]['generated'] for curr_node in G.nodes()]
+        # clean up a bit for "empty" constraints
+        flow_conservation_rhs = [flow_conservation_rhs[i] for i in range(len(flow_conservation_rhs)) if flow_conservation[i] != [[],[]]]
+        flow_conservation = [const for const in flow_conservation if const != [[],[]]]
+        find_flow.linear_constraints.add(lin_expr=flow_conservation, senses = "E"*len(flow_conservation), rhs = flow_conservation_rhs)
 
-    # Add a warm start from the previous_find_flow, if exists
-    # I'm not sure this helps accelerate the process. Not noticeable anyway.
-    # Should probably be better if I use the primal<->dual suggestion by Tal
-    #if previous_find_flow != None:
-    #    previous_names = previous_find_flow.variables.get_names()
-    #    previous_values = previous_find_flow.solution.get_values()
-    #    tmp_prev_sol = {previous_names[i]:previous_values[i] for i in range(len(previous_names))}
-    #    initial_vals = [tmp_prev_sol[curr_var] for curr_var in find_flow.variables.get_names()]
-    #    #print [find_flow.variables.get_names(),initial_vals]
-    #    find_flow.MIP_starts.add([find_flow.variables.get_names(),initial_vals], find_flow.MIP_starts.effort_level.repair)
-    #    find_flow.solution.
+        # Suppress cplex messages
+        find_flow.set_log_stream(None)
+        find_flow.set_error_stream(None)
+        find_flow.set_warning_stream(None)
+        find_flow.set_results_stream(None) #Enabling by argument as file name, i.e., set_results_stream('results_stream.txt')
 
+    else:
+        print 'Entered into modification of flow problem'
+        print 'will delete variables:', ['f' + str(i) for i in failed_edges]
+
+        # the problem has already been initialized, only need to delete certain variables and constraints
+        find_flow = previous_find_flow
+        # remove variables:
+        [find_flow.variables.delete('f' + str(i)) for i in failed_edges]
+        # remove constraints:
+        [find_flow.linear_constraints.delete('c_f' + str(i)) for i in failed_edges]
 
 
     # Solve problem
@@ -832,10 +833,12 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
         nx.write_gexf(G, "c:/temp/exported_grid_err.gexf")
         sys.exit('Error: no optimal solution found while trying to solve flow problem. Writing into: problem_infeasible.lp and c:/temp/exported_grid_err.gexf')
 
-    find_flow_vars = find_flow.solution.get_values()
+    flow_names = find_flow.variables.get_names()
+    flow_solution_values = find_flow.solution.get_values()
+    find_flow_vars = {flow_names[i]:flow_solution_values[i] for i in range(len(flow_names))}
 
     # Set the failed edges
-    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if abs(find_flow_vars[dvar_pos_flow[('f', edge)]]) > G.edge[edge[0]][edge[1]]['capacity']]
+    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if abs(find_flow_vars['f' + str(edge)]) > G.edge[edge[0]][edge[1]]['capacity']]
 
     # just in case you want an lp file - for debugging purposes.
 
