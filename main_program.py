@@ -37,7 +37,7 @@ write_res_file = True # # should I write the solution to a file (when the proces
 write_lp_file = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disabled by default
 print_cfe_results = False # should I print each cfe simulation results - which edges failed and which survived?
 limit_lazy_add = -1 # should I limit the number of lazy constraints added at each iteration. Use -1 for unlimited.
-incumbent_display_frequency = 0.05 # percent cases to display incumbent
+incumbent_display_frequency = 0.5#0.05 # percent cases to display incumbent
 time_spent_total = 0 # total time spent on solving the problem
 time_spent_cascade_sim = 0 # total time spent on cascade simulator
 
@@ -506,7 +506,6 @@ class MyLazy(LazyConstraintCallback):
         global print_cfe_results
         global run_heuristic_callback
         global incumbent_solution_from_lazy
-        global best_incumbent
 
         # The following should work in CPLEX version > 12.6
         #print self.get_solution_source()
@@ -716,6 +715,11 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     Returns final state of the grid after cascading failure evolution is complete.
     """
 
+    # the following definitions control the maximum number of cascades which the simulation should check, in proportion of cases
+    global simulation_complete_run # should the simulation be fully completed or only partial?
+    max_cascade_depth = 1 # where should the simulation be cut
+    prop_cascade_cut = 0.3 # what % of cases should have the cutpoint of max_cascade_depth (randomly selected)
+
     if print_debug_function_tracking:
         print "ENTERED: cascade_simulator_aux.cfe()"
     # initialize the list of failed edges at each iteration
@@ -728,8 +732,22 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     #current_flow = compute_flow(G)
     # loop
     i = 0
+    simulation_complete_run = True
+
     tmp_grid_flow_update = {'cplex_object': None} # initialize an empty object
-    while F[i]:  # list of edges failed in iteration i is not empty
+
+    continue_cascade = True
+
+    import random
+    random.seed(0) # I want the process to be consistent
+    if random.random() < prop_cascade_cut:
+        # should this iteration be stopped at max_cascade_depth?
+        simulation_complete_run = False
+    else:
+        simulation_complete_run = True
+
+    # The loop continues to recompute the flow only as long as there are more cascades and if this current simulation has a max depth then it has not been reached (i<max_cascade_depth)
+    while F[i] and (simulation_complete_run or i < max_cascade_depth):  # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
         tmp_grid_flow_update = grid_flow_update(G, F[i], False, True, tmp_grid_flow_update['cplex_object'])
         F[i+1] =  tmp_grid_flow_update['failed_edges']
@@ -906,7 +924,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
 
     # computing the unsupplied demand (objective value) and updating best incumbent if needed
     sup_demand = [scenarios[('s_pr', cur_scenario)]*sum([result_grid.node[cur_node]['demand'] for cur_node in result_grid.nodes()]) for (cur_scenario, result_grid) in tmpGs.iteritems()]
-    if sum(sup_demand) > best_incumbent:
+    if sum(sup_demand) > best_incumbent and simulation_complete_run:
         best_incumbent = sum(sup_demand) # update best incumbent solution
         run_heuristic_callback = True
         incumbent_solution_from_lazy = {'current_solution': current_solution, 'simulation_results': cfe_dict_results}
