@@ -48,7 +48,7 @@ time_spent_cascade_sim = 0 # total time spent on cascade simulator
 # ******************************************************************
 instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\case30\\' #adi_simple2_discrete\\'
 line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
-line_capacity_coef_scale = 10 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
+line_capacity_coef_scale = 7.5 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
