@@ -59,6 +59,16 @@ totruntime = 0.5*60*60 # in seconds
 
 
 
+
+# *************************************************************************************************
+# Define global variables related to the simulation - should complete simulation be run or partial?
+# *************************************************************************************************
+# the following definitions control the maximum number of cascades which the simulation should check, in proportion of cases
+max_cascade_depth = 1 # where should the simulation be cut
+prop_cascade_cut = 0.5 # what % of cases should have the cutpoint of max_cascade_depth (randomly selected)
+
+
+
 # ****************************************************
 # ******* The main program ***************************
 # ****************************************************
@@ -706,7 +716,7 @@ def update_grid(G, failed_edges):
         tot_generated = sum([G.node[i]['generated'] for i in component.node.keys()])
 
 
-def cfe(G, init_fail_edges, write_solution_file = False):
+def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run = True):
     """
     Simulates a cascade failure evolution (the CFE - algorithm 1 in paper)
     Input is an initial fail of edges (F),
@@ -714,11 +724,6 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     and dicts of capacity and demand.
     Returns final state of the grid after cascading failure evolution is complete.
     """
-
-    # the following definitions control the maximum number of cascades which the simulation should check, in proportion of cases
-    global simulation_complete_run # should the simulation be fully completed or only partial?
-    max_cascade_depth = 1 # where should the simulation be cut
-    prop_cascade_cut = 0.5 # what % of cases should have the cutpoint of max_cascade_depth (randomly selected)
 
     if print_debug_function_tracking:
         print "ENTERED: cascade_simulator_aux.cfe()"
@@ -732,7 +737,6 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     #current_flow = compute_flow(G)
     # loop
     i = 0
-    simulation_complete_run = True
 
     tmp_grid_flow_update = {'cplex_object': None} # initialize an empty object
 
@@ -904,6 +908,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     global run_heuristic_callback
     global incumbent_solution_from_lazy
     global best_incumbent
+    global simulation_complete_run
 
     if print_debug_function_tracking:
         print "ENTERED: compute_casecade.compute_failure()"
@@ -914,7 +919,10 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
 
     cfe_time_start = clock() # measure time spent on cascade simulation
     # run the cfe
-    cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False) for cur_scenario in scenario_list}
+    import random
+    if random.random() < prop_cascade_cut:
+        simulation_complete_run = False
+    cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False, simulation_complete_run) for cur_scenario in scenario_list}
     # finish up time measurement
     cfe_time_total = clock() - cfe_time_start
     time_spent_cascade_sim += cfe_time_total
@@ -923,7 +931,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
 
     # computing the unsupplied demand (objective value) and updating best incumbent if needed
     sup_demand = [scenarios[('s_pr', cur_scenario)]*sum([result_grid.node[cur_node]['demand'] for cur_node in result_grid.nodes()]) for (cur_scenario, result_grid) in tmpGs.iteritems()]
-    if sum(sup_demand) > best_incumbent and simulation_complete_run:
+    if (sum(sup_demand) > best_incumbent) and (simulation_complete_run):
         best_incumbent = sum(sup_demand) # update best incumbent solution
         run_heuristic_callback = True
         incumbent_solution_from_lazy = {'current_solution': current_solution, 'simulation_results': cfe_dict_results}
