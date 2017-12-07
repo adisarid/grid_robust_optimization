@@ -37,7 +37,7 @@ write_res_file = True # # should I write the solution to a file (when the proces
 write_lp_file = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disabled by default
 print_cfe_results = False # should I print each cfe simulation results - which edges failed and which survived?
 limit_lazy_add = -1 # should I limit the number of lazy constraints added at each iteration. Use -1 for unlimited.
-incumbent_display_frequency = 0.5#0.05 # percent cases to display incumbent
+incumbent_display_frequency = 0.1 #0.05 # percent cases to display incumbent
 time_spent_total = 0 # total time spent on solving the problem
 time_spent_cascade_sim = 0 # total time spent on cascade simulator
 
@@ -48,13 +48,13 @@ time_spent_cascade_sim = 0 # total time spent on cascade simulator
 # ******************************************************************
 instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\case30\\' #adi_simple2_discrete\\'
 line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
-line_capacity_coef_scale = 7.5 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
+line_capacity_coef_scale = 5 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
 epsilon = 1e-3
 bigM = 1.0/epsilon
-epgap = 0.01/100 # optimality gap target, e.g., 0.01 = 1%
+epgap = 0.01 # optimality gap target, e.g., 0.01 = 1%
 totruntime = 0.5*60*60 # in seconds
 
 
@@ -716,7 +716,7 @@ def update_grid(G, failed_edges):
         tot_generated = sum([G.node[i]['generated'] for i in component.node.keys()])
 
 
-def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run = True):
+def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run = True, current_solution = []):
     """
     Simulates a cascade failure evolution (the CFE - algorithm 1 in paper)
     Input is an initial fail of edges (F),
@@ -740,8 +740,6 @@ def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run
 
     tmp_grid_flow_update = {'cplex_object': None} # initialize an empty object
 
-    continue_cascade = True
-
     import random
     if random.random() < prop_cascade_cut:
         # should this iteration be stopped at max_cascade_depth?
@@ -749,19 +747,21 @@ def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run
     else:
         simulation_complete_run = True
 
+    contradiction_found = False # is there a contradiction between current_solution and latest simulation found
+
+
     # The loop continues to recompute the flow only as long as there are more cascades and if this current simulation has a max depth then it has not been reached (i<max_cascade_depth)
-    while F[i] and (simulation_complete_run or i < max_cascade_depth):  # list of edges failed in iteration i is not empty
+    while F[i] and (simulation_complete_run or i < max_cascade_depth) and (not contradiction_found):  # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
         tmp_grid_flow_update = grid_flow_update(G, F[i], False, True, tmp_grid_flow_update['cplex_object'])
         F[i+1] =  tmp_grid_flow_update['failed_edges']
         tot_failed += F[i+1]
         i += 1
 
+
+
     tmpG = G.copy()
-    # PS - I tried to compute the total loss here, but ran into a weird "An integer is required" bug. Returning the grid to compute unsupplied at a higher level.
-    #print "Started"
-    #print sum([tmpG.node[i]['demand'] for i in tmpG.nodes()])
-    #print "Finished"
+
 
     # return computed values and exit function
     return({'F': F, 't':i, 'all_failed': tot_failed, 'updated_grid_copy': tmpG})#, 'tot_supplied': tot_unsupplied})
@@ -917,12 +917,15 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     scenario_list = [cur_sce[1] for cur_sce in scenarios.keys() if cur_sce[0] == 's_pr'] # get scenario list
     initial_failures_to_cfe = {cur_scenario: scenarios[('s', cur_scenario)] for cur_scenario in scenario_list}
 
-    cfe_time_start = clock() # measure time spent on cascade simulation
-    # run the cfe
     import random
     if random.random() < prop_cascade_cut:
-        simulation_complete_run = False
-    cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False, simulation_complete_run) for cur_scenario in scenario_list}
+        simulation_complete_run = False # the simulation is going to be partial
+    else:
+        simulation_complete_run = True # the simulation is going to be complete
+
+    cfe_time_start = clock() # measure time spent on cascade simulation
+    # run the cfe
+    cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False, simulation_complete_run = simulation_complete_run, current_solution = current_solution) for cur_scenario in scenario_list}
     # finish up time measurement
     cfe_time_total = clock() - cfe_time_start
     time_spent_cascade_sim += cfe_time_total
@@ -936,8 +939,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
         run_heuristic_callback = True
         incumbent_solution_from_lazy = {'current_solution': current_solution, 'simulation_results': cfe_dict_results}
 
-    # print the best incumbent for tenth cases (if tick is < 6 sec).
-    import random
+    # print the best incumbent for tenth cases (if tick is < display frequency).
     if random.random() <= incumbent_display_frequency:
         time_spent_total = clock()
         print "Curr sol=", sum(sup_demand), "Incumb=", best_incumbent, "Time on sim=", round(time_spent_cascade_sim), "Tot time", round(time_spent_total), "(", round(time_spent_cascade_sim/time_spent_total*100), "%) on sim"
