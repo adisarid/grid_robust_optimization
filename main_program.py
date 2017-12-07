@@ -739,7 +739,6 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     continue_cascade = True
 
     import random
-    random.seed(0) # I want the process to be consistent
     if random.random() < prop_cascade_cut:
         # should this iteration be stopped at max_cascade_depth?
         simulation_complete_run = False
