@@ -48,7 +48,7 @@ time_spent_cascade_sim = 0 # total time spent on cascade simulator
 # ******************************************************************
 instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\case30\\' #adi_simple2_discrete\\'
 line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
-line_capacity_coef_scale = 10 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
+line_capacity_coef_scale = 7.5 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
@@ -718,7 +718,7 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     # the following definitions control the maximum number of cascades which the simulation should check, in proportion of cases
     global simulation_complete_run # should the simulation be fully completed or only partial?
     max_cascade_depth = 1 # where should the simulation be cut
-    prop_cascade_cut = 0.3 # what % of cases should have the cutpoint of max_cascade_depth (randomly selected)
+    prop_cascade_cut = 0.5 # what % of cases should have the cutpoint of max_cascade_depth (randomly selected)
 
     if print_debug_function_tracking:
         print "ENTERED: cascade_simulator_aux.cfe()"
