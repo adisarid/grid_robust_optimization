@@ -37,7 +37,7 @@ write_res_file = True # # should I write the solution to a file (when the proces
 write_lp_file = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disabled by default
 print_cfe_results = False # should I print each cfe simulation results - which edges failed and which survived?
 limit_lazy_add = -1 # should I limit the number of lazy constraints added at each iteration. Use -1 for unlimited.
-incumbent_display_frequency = 0.1 #0.05 # percent cases to display incumbent
+incumbent_display_frequency = 0.05 #0.05 # percent cases to display incumbent
 time_spent_total = 0 # total time spent on solving the problem
 time_spent_cascade_sim = 0 # total time spent on cascade simulator
 
@@ -64,8 +64,8 @@ totruntime = 0.5*60*60 # in seconds
 # Define global variables related to the simulation - should complete simulation be run or partial?
 # *************************************************************************************************
 # the following definitions control the maximum number of cascades which the simulation should check, in proportion of cases
-max_cascade_depth = 1 # where should the simulation be cut
-prop_cascade_cut = 0.5 # what % of cases should have the cutpoint of max_cascade_depth (randomly selected)
+max_cascade_depth = 2 # where should the simulation be cut
+prop_cascade_cut = 0.9 # what % of cases should have a "short run" (stop simulation after max_cascade_depth)
 
 
 
@@ -610,24 +610,26 @@ def build_cfe_constraints(current_solution, timestampstr):
 
         # Add non-failed edges (by end of simulation did not fail at all) - should be retained
         # the non failed edges are all the edges which are not in prev_failures
-        non_failed_edges = [cur_edge for cur_edge in all_edges if cur_edge not in failure_dict['all_failed']]
-        for curr_non_failed_edge in non_failed_edges: # <- convert later on to list comprehention
-            str_flag = "ok"
-            if current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]] > 0.999:
+        # another condition is that the simulation that this is based on was not a "short run" (short run = only first cascade)
+        if simulation_complete_run:
+            non_failed_edges = [cur_edge for cur_edge in all_edges if cur_edge not in failure_dict['all_failed']]
+            for curr_non_failed_edge in non_failed_edges: # <- convert later on to list comprehention
+                str_flag = "ok"
+                if current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]] > 0.999:
+                    if print_debug_verbose:
+                        str_flag = "CONTRADICTION (failed but should not have)"
+                    if add_constraint_limit != 0:
+                        add_constraint_limit -= 1
+                        if print_debug_verbose and add_constraint_limit > 0:
+                            print "Limiting number of lazy constraints per scenario: only", add_constraint_limit, "of", limit_lazy_add, "left (scenario", cur_scenario, ")"
+                        tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
+                        tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [1]
+                        tmp_rhs = len(X_established) + len(c_upgraded) + 1 - epsilon #+1 for the 1-F on the right hand side of the equation
+                        positions_list += [tmp_position]
+                        coefficient_list += [tmp_coeff]
+                        rhs_list += [tmp_rhs]
                 if print_debug_verbose:
-                    str_flag = "CONTRADICTION (failed but should not have)"
-                if add_constraint_limit != 0:
-                    add_constraint_limit -= 1
-                    if print_debug_verbose and add_constraint_limit > 0:
-                        print "Limiting number of lazy constraints per scenario: only", add_constraint_limit, "of", limit_lazy_add, "left (scenario", cur_scenario, ")"
-                    tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
-                    tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [1]
-                    tmp_rhs = len(X_established) + len(c_upgraded) + 1 - epsilon #+1 for the 1-F on the right hand side of the equation
-                    positions_list += [tmp_position]
-                    coefficient_list += [tmp_coeff]
-                    rhs_list += [tmp_rhs]
-            if print_debug_verbose:
-                print ('F', curr_non_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]], "<--", str_flag
+                    print ('F', curr_non_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]], "<--", str_flag
 
     cfe_constraints = {'positions': positions_list, 'coefficients': coefficient_list, 'rhs': rhs_list, 'sim_failures': simulation_failures}
 
@@ -716,7 +718,7 @@ def update_grid(G, failed_edges):
         tot_generated = sum([G.node[i]['generated'] for i in component.node.keys()])
 
 
-def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run = True, current_solution = []):
+def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run = True, fails_per_scenario = []):
     """
     Simulates a cascade failure evolution (the CFE - algorithm 1 in paper)
     Input is an initial fail of edges (F),
@@ -740,28 +742,23 @@ def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run
 
     tmp_grid_flow_update = {'cplex_object': None} # initialize an empty object
 
-    import random
-    if random.random() < prop_cascade_cut:
-        # should this iteration be stopped at max_cascade_depth?
-        simulation_complete_run = False
-    else:
-        simulation_complete_run = True
-
     contradiction_found = False # is there a contradiction between current_solution and latest simulation found
 
 
     # The loop continues to recompute the flow only as long as there are more cascades and if this current simulation has a max depth then it has not been reached (i<max_cascade_depth)
-    while F[i] and (simulation_complete_run or i < max_cascade_depth) and (not contradiction_found):  # list of edges failed in iteration i is not empty
+    while F[i] and (simulation_complete_run or i <= max_cascade_depth) and (not contradiction_found): # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
         tmp_grid_flow_update = grid_flow_update(G, F[i], False, True, tmp_grid_flow_update['cplex_object'])
         F[i+1] =  tmp_grid_flow_update['failed_edges']
         tot_failed += F[i+1]
         i += 1
-
-
+        # update if a contradiction has been found, but only contradctions of the following type:
+        # "did not fail in the current solution but should have failed according to the iterations so far"
+        should_fail_contradictions = [sim_failed_edge for sim_failed_edge in tot_failed if sim_failed_edge not in fails_per_scenario]
+        if (should_fail_contradictions != []) and (not simulation_complete_run) and (i == max_cascade_depth):
+            contradiction_found = True
 
     tmpG = G.copy()
-
 
     # return computed values and exit function
     return({'F': F, 't':i, 'all_failed': tot_failed, 'updated_grid_copy': tmpG})#, 'tot_supplied': tot_unsupplied})
@@ -917,15 +914,21 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     scenario_list = [cur_sce[1] for cur_sce in scenarios.keys() if cur_sce[0] == 's_pr'] # get scenario list
     initial_failures_to_cfe = {cur_scenario: scenarios[('s', cur_scenario)] for cur_scenario in scenario_list}
 
+    # determine if CFE should run completely or partially (i.e., only first cascade)
     import random
-    if random.random() < prop_cascade_cut:
+    if random.random() < prop_cascade_cut: # prop_cascade_cut is defined as a global variable at the top
         simulation_complete_run = False # the simulation is going to be partial
     else:
         simulation_complete_run = True # the simulation is going to be complete
 
+    # extract all failed edges per scenario
+    all_failures_per_scenario = {cur_scenario: [cur_edge for cur_edge in all_edges if current_solution[dvar_pos[('F', cur_edge, cur_scenario)]] > 0.99] for cur_scenario in scenario_list}
+
     cfe_time_start = clock() # measure time spent on cascade simulation
-    # run the cfe
-    cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False, simulation_complete_run = simulation_complete_run, current_solution = current_solution) for cur_scenario in scenario_list}
+
+    # Run the CFE
+    cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False, simulation_complete_run = simulation_complete_run, fails_per_scenario = all_failures_per_scenario[cur_scenario]) for cur_scenario in scenario_list}
+
     # finish up time measurement
     cfe_time_total = clock() - cfe_time_start
     time_spent_cascade_sim += cfe_time_total
