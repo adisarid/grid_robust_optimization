@@ -258,7 +258,6 @@ def build_cplex_problem():
     dvar_lb = []
     dvar_ub = []
     dvar_type = []
-    dvar_priority = [] # will contain the priority for branching
 
     # initialize lists: nodes, edges, scenarios
     global all_edges
@@ -284,7 +283,6 @@ def build_cplex_problem():
             dvar_lb.append(0)
             dvar_ub.append(nodes[('c', cur_node)] + nodes[('gen_up_ub', cur_node)])
             dvar_type.append('C')
-            dvar_priority.append(1)
 
             # unsuppled demand variable (w)
             if nodes[('d', cur_node)] > 0:
@@ -294,7 +292,6 @@ def build_cplex_problem():
                 dvar_lb.append(0)
                 dvar_ub.append(nodes[('d', cur_node)])
                 dvar_type.append('C')
-                dvar_priority.append(0)
 
             # phase angle (theta)
             dvar_name.append('theta_' + cur_node + 's' + cur_scenario)
@@ -303,7 +300,6 @@ def build_cplex_problem():
             dvar_lb.append(0)
             dvar_ub.append(360)
             dvar_type.append('C')
-            dvar_priority.append(0)
 
         # capacity upgrade of node (independent of scenario)
         dvar_name.append('c_' + cur_node)
@@ -312,7 +308,6 @@ def build_cplex_problem():
         dvar_lb.append(0)
         dvar_ub.append(nodes[('gen_up_ub', cur_node)])
         dvar_type.append('C')
-        dvar_priority.append(1)
 
         # establish backup capacity at node i
         dvar_name.append('Z_' + cur_node)
@@ -321,7 +316,6 @@ def build_cplex_problem():
         dvar_lb.append(0)
         dvar_ub.append(1)
         dvar_type.append('B')
-        dvar_priority.append(1)
 
     # by edges
     all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
@@ -335,7 +329,6 @@ def build_cplex_problem():
             dvar_lb.append(-tot_demand)
             dvar_ub.append(tot_demand)
             dvar_type.append('C')
-            dvar_priority.append(0)
 
             # define failed edges
             dvar_name.append('F_' + edge_str + 's' + cur_scenario)
@@ -344,7 +337,6 @@ def build_cplex_problem():
             dvar_lb.append(0)
             dvar_ub.append(1)
             dvar_type.append('B')
-            dvar_priority.append(0)
 
 
         # define capacity upgrade constraints
@@ -354,7 +346,6 @@ def build_cplex_problem():
         dvar_lb.append(0)
         dvar_ub.append(tot_demand)
         dvar_type.append('B') # changed to binary variable
-        dvar_priority.append(1)
 
 
 
@@ -366,7 +357,6 @@ def build_cplex_problem():
             dvar_lb.append(0)
             dvar_ub.append(1)
             dvar_type.append('B')
-            dvar_priority.append(1)
 
     # create cplex object based on dvar_pos, dvar_obj_coef, dvar_lb, dvar_ub, dvar_type
     robust_opt = create_cplex_object()
