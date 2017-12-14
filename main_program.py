@@ -71,7 +71,9 @@ else:
 
 
 # *************************************************************************************************
-# Define global variables related to the simulation - should complete simulation be run or partial?
+# Define global variables related to the convergence:
+# Should use shortrun simulation features?
+# Should use decision variables priorities?
 # *************************************************************************************************
 # the following definitions control the maximum number of cascades which the simulation should check, in proportion of cases
 max_cascade_depth = 2 # where should the simulation be cut
@@ -82,6 +84,11 @@ if len(sys.argv) <= 3:
 else:
     prop_cascade_cut = float(sys.argv[3])
 
+# set decision variable priorities?
+if len(sys.argv) <= 4:
+    set_decision_var_priorities = True
+else:
+    set_decision_var_priorities = (sys.argv[4] != 'False' and sys.argv[4] != '0')
 
 
 # ****************************************************
@@ -406,10 +413,11 @@ def create_cplex_object():
     # building the decision variables within object
     robust_opt.variables.add(obj = dvar_obj_coef, lb = dvar_lb, ub = dvar_ub, types = dvar_type, names = dvar_name)
 
-    # set priorities for all infrastructure variables (c, X, Z)
-    high_priority_list = [(cur_var, 100, robust_opt.order.branch_direction.up) for cur_var in dvar_name if 'X' in cur_var or 'c' in cur_var or 'Z' in cur_var]
-    # all other variables will have priority 0 by default (https://www.ibm.com/support/knowledgecenter/en/SSSA5P_12.6.0/ilog.odms.cplex.help/refdotnetcplex/html/M_ILOG_CPLEX_Cplex_SetPriorities.htm)
-    robust_opt.order.set(high_priority_list)  # a list of tuple triplets (variable, priority, direction)
+    if set_decision_var_priorities:
+        # set priorities for all infrastructure variables (c, X, Z)
+        high_priority_list = [(cur_var, 100, robust_opt.order.branch_direction.up) for cur_var in dvar_name if 'X' in cur_var or 'c' in cur_var or 'Z' in cur_var]
+        # all other variables will have priority 0 by default (https://www.ibm.com/support/knowledgecenter/en/SSSA5P_12.6.0/ilog.odms.cplex.help/refdotnetcplex/html/M_ILOG_CPLEX_Cplex_SetPriorities.htm)
+        robust_opt.order.set(high_priority_list)  # a list of tuple triplets (variable, priority, direction)
 
     # build constraints (all except for cascade inducing constraints)
 
@@ -963,9 +971,13 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
         run_heuristic_callback = True
         incumbent_solution_from_lazy = {'current_solution': current_solution, 'simulation_results': cfe_dict_results}
 
-    # print the best incumbent for tenth cases (if tick is < display frequency).
+    # print the best incumbent for incumbent_display_frequency% cases (if tick is < display frequency).
     if random.random() <= incumbent_display_frequency:
         time_spent_total = clock()
+        if append_solution_statistics:
+            with open(append_solution_statistics, 'a') as f:
+                writer = csv.writer(f)
+                writer.writerow([prop_cascade_cut, time_spent_total, time_spent_cascade_sim, best_incumbent])
         print "Curr sol=", sum(sup_demand), "Incumb=", best_incumbent, "Time on sim=", round(time_spent_cascade_sim), "Tot time", round(time_spent_total), "(", round(time_spent_cascade_sim/time_spent_total*100), "%) on sim"
         print "   Node  Left     Objective  IInf  Best Integer    Cuts/Bound    ItCnt     Gap         Variable B NodeID Parent  Depth"
         # consider later on to add: write incumbent solution to file.
