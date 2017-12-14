@@ -37,16 +37,23 @@ write_res_file = True # # should I write the solution to a file (when the proces
 write_lp_file = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disabled by default
 print_cfe_results = False # should I print each cfe simulation results - which edges failed and which survived?
 limit_lazy_add = -1 # should I limit the number of lazy constraints added at each iteration. Use -1 for unlimited.
-incumbent_display_frequency = 0.05 # percent cases to display incumbent
+incumbent_display_frequency = 0.05 #0.05 # percent cases to display incumbent
 time_spent_total = 0 # total time spent on solving the problem
 time_spent_cascade_sim = 0 # total time spent on cascade simulator
+append_solution_statistics = 'c:\\temp\\solution_statistics.csv' # if set as False will not update this file
 
 
 
 # ******************************************************************
 # Define global variables related to global parameters and callbacks
 # ******************************************************************
-instance_location = 'c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\case30\\' #adi_simple2_discrete\\'
+
+# set location of data directory from input arguments:
+if len(sys.argv) == 1:
+    instance_location = os.getcwd() + '\\case30\\'
+else:
+    instance_location = os.getcwd() + '\\' + sys.argv[1]
+
 line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
 line_capacity_coef_scale = 7.5 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
@@ -54,8 +61,26 @@ run_heuristic_callback = False # default is not to run heuristic callback until 
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
 epsilon = 1e-3
 bigM = 1.0/epsilon
-epgap = 0.01/100 # optimality gap target, e.g., 0.01 = 1%
-totruntime = 0.5*60*60 # in seconds
+epgap = 0.01 # optimality gap target, e.g., 0.01 = 1%
+
+# set runtime limit from input arguments (input argument should be in hours)
+if len(sys.argv) <= 2:
+    totruntime = 0.5*60*60 # in seconds. Default set at 30 minutes
+else:
+    totruntime = float(sys.argv[2])*60*60
+
+
+# *************************************************************************************************
+# Define global variables related to the simulation - should complete simulation be run or partial?
+# *************************************************************************************************
+# the following definitions control the maximum number of cascades which the simulation should check, in proportion of cases
+max_cascade_depth = 2 # where should the simulation be cut
+
+# set proportion of short runs from input if given
+if len(sys.argv) <= 3:
+    prop_cascade_cut = 0.00 # what % of cases should have a "short run" (stop simulation after max_cascade_depth). When 0.0 then short runs are disabled (default)
+else:
+    prop_cascade_cut = float(sys.argv[3])
 
 
 
@@ -512,7 +537,6 @@ class MyLazy(LazyConstraintCallback):
         global print_cfe_results
         global run_heuristic_callback
         global incumbent_solution_from_lazy
-        global best_incumbent
 
         # The following should work in CPLEX version > 12.6
         #print self.get_solution_source()
@@ -607,24 +631,26 @@ def build_cfe_constraints(current_solution, timestampstr):
 
         # Add non-failed edges (by end of simulation did not fail at all) - should be retained
         # the non failed edges are all the edges which are not in prev_failures
-        non_failed_edges = [cur_edge for cur_edge in all_edges if cur_edge not in failure_dict['all_failed']]
-        for curr_non_failed_edge in non_failed_edges: # <- convert later on to list comprehention
-            str_flag = "ok"
-            if current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]] > 0.999:
+        # another condition is that the simulation that this is based on was not a "short run" (short run = only first cascade)
+        if simulation_complete_run:
+            non_failed_edges = [cur_edge for cur_edge in all_edges if cur_edge not in failure_dict['all_failed']]
+            for curr_non_failed_edge in non_failed_edges: # <- convert later on to list comprehention
+                str_flag = "ok"
+                if current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]] > 0.999:
+                    if print_debug_verbose:
+                        str_flag = "CONTRADICTION (failed but should not have)"
+                    if add_constraint_limit != 0:
+                        add_constraint_limit -= 1
+                        if print_debug_verbose and add_constraint_limit > 0:
+                            print "Limiting number of lazy constraints per scenario: only", add_constraint_limit, "of", limit_lazy_add, "left (scenario", cur_scenario, ")"
+                        tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
+                        tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [1]
+                        tmp_rhs = len(X_established) + len(c_upgraded) + 1 - epsilon #+1 for the 1-F on the right hand side of the equation
+                        positions_list += [tmp_position]
+                        coefficient_list += [tmp_coeff]
+                        rhs_list += [tmp_rhs]
                 if print_debug_verbose:
-                    str_flag = "CONTRADICTION (failed but should not have)"
-                if add_constraint_limit != 0:
-                    add_constraint_limit -= 1
-                    if print_debug_verbose and add_constraint_limit > 0:
-                        print "Limiting number of lazy constraints per scenario: only", add_constraint_limit, "of", limit_lazy_add, "left (scenario", cur_scenario, ")"
-                    tmp_position = X_established + X_not_established + c_upgraded + c_not_upgraded + [dvar_pos[('F', curr_non_failed_edge, cur_scenario)]]
-                    tmp_coeff = [1]*len(X_established) + [-1]*len(X_not_established) + [1]*len(c_upgraded) + [-1]*len(c_not_upgraded) + [1]
-                    tmp_rhs = len(X_established) + len(c_upgraded) + 1 - epsilon #+1 for the 1-F on the right hand side of the equation
-                    positions_list += [tmp_position]
-                    coefficient_list += [tmp_coeff]
-                    rhs_list += [tmp_rhs]
-            if print_debug_verbose:
-                print ('F', curr_non_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]], "<--", str_flag
+                    print ('F', curr_non_failed_edge, cur_scenario), '=', current_solution[dvar_pos[('F', curr_non_failed_edge, cur_scenario)]], "<--", str_flag
 
     cfe_constraints = {'positions': positions_list, 'coefficients': coefficient_list, 'rhs': rhs_list, 'sim_failures': simulation_failures}
 
@@ -713,7 +739,7 @@ def update_grid(G, failed_edges):
         tot_generated = sum([G.node[i]['generated'] for i in component.node.keys()])
 
 
-def cfe(G, init_fail_edges, write_solution_file = False):
+def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run = True, fails_per_scenario = []):
     """
     Simulates a cascade failure evolution (the CFE - algorithm 1 in paper)
     Input is an initial fail of edges (F),
@@ -734,19 +760,26 @@ def cfe(G, init_fail_edges, write_solution_file = False):
     #current_flow = compute_flow(G)
     # loop
     i = 0
+
     tmp_grid_flow_update = {'cplex_object': None} # initialize an empty object
-    while F[i]:  # list of edges failed in iteration i is not empty
+
+    contradiction_found = False # is there a contradiction between current_solution and latest simulation found
+
+
+    # The loop continues to recompute the flow only as long as there are more cascades and if this current simulation has a max depth then it has not been reached (i<max_cascade_depth)
+    while F[i] and (simulation_complete_run or i <= max_cascade_depth) and (not contradiction_found): # list of edges failed in iteration i is not empty
         #print i # for debugging purposes
         tmp_grid_flow_update = grid_flow_update(G, F[i], False, True, tmp_grid_flow_update['cplex_object'])
         F[i+1] =  tmp_grid_flow_update['failed_edges']
         tot_failed += F[i+1]
         i += 1
+        # update if a contradiction has been found, but only contradctions of the following type:
+        # "did not fail in the current solution but should have failed according to the iterations so far"
+        should_fail_contradictions = [sim_failed_edge for sim_failed_edge in tot_failed if sim_failed_edge not in fails_per_scenario]
+        if (should_fail_contradictions != []) and (not simulation_complete_run) and (i == max_cascade_depth):
+            contradiction_found = True
 
     tmpG = G.copy()
-    # PS - I tried to compute the total loss here, but ran into a weird "An integer is required" bug. Returning the grid to compute unsupplied at a higher level.
-    #print "Started"
-    #print sum([tmpG.node[i]['demand'] for i in tmpG.nodes()])
-    #print "Finished"
 
     # return computed values and exit function
     return({'F': F, 't':i, 'all_failed': tot_failed, 'updated_grid_copy': tmpG})#, 'tot_supplied': tot_unsupplied})
@@ -893,6 +926,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     global run_heuristic_callback
     global incumbent_solution_from_lazy
     global best_incumbent
+    global simulation_complete_run
 
     if print_debug_function_tracking:
         print "ENTERED: compute_casecade.compute_failure()"
@@ -901,9 +935,21 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     scenario_list = [cur_sce[1] for cur_sce in scenarios.keys() if cur_sce[0] == 's_pr'] # get scenario list
     initial_failures_to_cfe = {cur_scenario: scenarios[('s', cur_scenario)] for cur_scenario in scenario_list}
 
+    # determine if CFE should run completely or partially (i.e., only first cascade)
+    import random
+    if random.random() < prop_cascade_cut: # prop_cascade_cut is defined as a global variable at the top
+        simulation_complete_run = False # the simulation is going to be partial
+    else:
+        simulation_complete_run = True # the simulation is going to be complete
+
+    # extract all failed edges per scenario
+    all_failures_per_scenario = {cur_scenario: [cur_edge for cur_edge in all_edges if current_solution[dvar_pos[('F', cur_edge, cur_scenario)]] > 0.99] for cur_scenario in scenario_list}
+
     cfe_time_start = clock() # measure time spent on cascade simulation
-    # run the cfe
-    cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False) for cur_scenario in scenario_list}
+
+    # Run the CFE
+    cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), initial_failures_to_cfe[cur_scenario], write_solution_file = False, simulation_complete_run = simulation_complete_run, fails_per_scenario = all_failures_per_scenario[cur_scenario]) for cur_scenario in scenario_list}
+
     # finish up time measurement
     cfe_time_total = clock() - cfe_time_start
     time_spent_cascade_sim += cfe_time_total
@@ -912,13 +958,12 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
 
     # computing the unsupplied demand (objective value) and updating best incumbent if needed
     sup_demand = [scenarios[('s_pr', cur_scenario)]*sum([result_grid.node[cur_node]['demand'] for cur_node in result_grid.nodes()]) for (cur_scenario, result_grid) in tmpGs.iteritems()]
-    if sum(sup_demand) > best_incumbent:
+    if (sum(sup_demand) > best_incumbent) and (simulation_complete_run):
         best_incumbent = sum(sup_demand) # update best incumbent solution
         run_heuristic_callback = True
         incumbent_solution_from_lazy = {'current_solution': current_solution, 'simulation_results': cfe_dict_results}
 
-    # print the best incumbent for tenth cases (if tick is < 6 sec).
-    import random
+    # print the best incumbent for tenth cases (if tick is < display frequency).
     if random.random() <= incumbent_display_frequency:
         time_spent_total = clock()
         print "Curr sol=", sum(sup_demand), "Incumb=", best_incumbent, "Time on sim=", round(time_spent_cascade_sim), "Tot time", round(time_spent_total), "(", round(time_spent_cascade_sim/time_spent_total*100), "%) on sim"
