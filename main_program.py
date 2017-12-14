@@ -56,7 +56,7 @@ else:
     append_solution_statistics = os.getcwd() + '\\' + sys.argv[1] + '_solution_statistics.csv'
 
 line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
-line_capacity_coef_scale = 7.5 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
+line_capacity_coef_scale = 5 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
@@ -419,6 +419,7 @@ def create_cplex_object():
         high_priority_list = [(cur_var, 100, robust_opt.order.branch_direction.up) for cur_var in dvar_name if 'X' in cur_var or 'c' in cur_var or 'Z' in cur_var]
         # all other variables will have priority 0 by default (https://www.ibm.com/support/knowledgecenter/en/SSSA5P_12.6.0/ilog.odms.cplex.help/refdotnetcplex/html/M_ILOG_CPLEX_Cplex_SetPriorities.htm)
         robust_opt.order.set(high_priority_list)  # a list of tuple triplets (variable, priority, direction)
+        print "NOTE: Setting branch priorities for decision variables X, Z, c"
 
     # build constraints (all except for cascade inducing constraints)
 
@@ -976,9 +977,9 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     if random.random() <= incumbent_display_frequency:
         time_spent_total = clock()
         if append_solution_statistics:
-            with open(append_solution_statistics, 'a') as f:
+            with open(append_solution_statistics, 'ba') as f:
                 writer = csv.writer(f)
-                writer.writerow([prop_cascade_cut, time_spent_total, time_spent_cascade_sim, best_incumbent])
+                writer.writerow([prop_cascade_cut, set_decision_var_priorities, time_spent_total, time_spent_cascade_sim, best_incumbent])
         print "Curr sol=", sum(sup_demand), "Incumb=", best_incumbent, "Time on sim=", round(time_spent_cascade_sim), "Tot time", round(time_spent_total), "(", round(time_spent_cascade_sim/time_spent_total*100), "%) on sim"
         print "   Node  Left     Objective  IInf  Best Integer    Cuts/Bound    ItCnt     Gap         Variable B NodeID Parent  Depth"
         # consider later on to add: write incumbent solution to file.
