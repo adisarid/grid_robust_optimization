@@ -52,7 +52,8 @@ append_solution_statistics = 'c:\\temp\\solution_statistics.csv' # if set as Fal
 if len(sys.argv) == 1:
     instance_location = os.getcwd() + '\\case30\\'
 else:
-    instance_location = os.getcwd() + '\\' + sys.argv[1]
+    instance_location = os.getcwd() + '\\' + sys.argv[1] + '\\'
+    append_solution_statistics = os.getcwd() + '\\' + sys.argv[1] + '_solution_statistics.csv'
 
 line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
 line_capacity_coef_scale = 7.5 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
