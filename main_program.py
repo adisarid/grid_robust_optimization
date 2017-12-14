@@ -977,7 +977,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     if random.random() <= incumbent_display_frequency:
         time_spent_total = clock()
         if append_solution_statistics:
-            with open(append_solution_statistics, 'ba') as f:
+            with open(append_solution_statistics, 'ab') as f:
                 writer = csv.writer(f)
                 writer.writerow([prop_cascade_cut, set_decision_var_priorities, time_spent_total, time_spent_cascade_sim, best_incumbent])
         print "Curr sol=", sum(sup_demand), "Incumb=", best_incumbent, "Time on sim=", round(time_spent_cascade_sim), "Tot time", round(time_spent_total), "(", round(time_spent_cascade_sim/time_spent_total*100), "%) on sim"
