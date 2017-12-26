@@ -53,7 +53,7 @@ if len(sys.argv) == 1:
     instance_location = os.getcwd() + '\\case30\\'
 else:
     instance_location = os.getcwd() + '\\' + sys.argv[1] + '\\'
-    append_solution_statistics = os.getcwd() + '\\' + sys.argv[1] + '_solution_statistics.csv'
+    append_solution_statistics = "c:\\temp\\grid_cascade_output\\" + sys.argv[1] + '_solution_statistics.csv'
 
 line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
@@ -188,7 +188,6 @@ def main_program():
                 best_incumbent = robust_opt_cplex.solution.get_objective_value()
                 writer = csv.writer(f)
                 writer.writerow([prop_cascade_cut, set_decision_var_priorities, clock(), "NA", best_incumbent])
-
 
 
 
@@ -1047,8 +1046,6 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     G.add_edges_from(add_edges_2)
 
     return(G)
-
-
 
 
 # ****************************************************
