@@ -777,7 +777,9 @@ def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run
 
 
     # The loop continues to recompute the flow only as long as there are more cascades and if this current simulation has a max depth then it has not been reached (i<max_cascade_depth)
-    while F[i] and (simulation_complete_run or i <= max_cascade_depth) and (not contradiction_found): # list of edges failed in iteration i is not empty
+    while (F[i] and simulation_complete_run) or (not simulation_complete_run and not contradiction_found): # list of edges failed in iteration i is not empty
+        #print "simulation_complete_run =", simulation_complete_run
+        #print "contradiction_found =", contradiction_found
         #print i # for debugging purposes
         tmp_grid_flow_update = grid_flow_update(G, F[i], False, True, tmp_grid_flow_update['cplex_object'])
         F[i+1] =  tmp_grid_flow_update['failed_edges']
@@ -785,12 +787,15 @@ def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run
         i += 1
         # update if a contradiction has been found, but only contradctions of the following type:
         # "did not fail in the current solution but should have failed according to the iterations so far"
+        #print "fails_per_scenario =", fails_per_scenario
         should_fail_contradictions = [sim_failed_edge for sim_failed_edge in tot_failed if sim_failed_edge not in fails_per_scenario]
-        if (should_fail_contradictions != []) and (not simulation_complete_run) and (i == max_cascade_depth):
+        #print "should_fail_contradictions =", should_fail_contradictions
+        if (should_fail_contradictions != []) and (not simulation_complete_run):
             contradiction_found = True
+            #print"setting contradiction_found =", contradiction_found
 
     tmpG = G.copy()
-
+    #print "returning tot_failed =", tot_failed
     # return computed values and exit function
     return({'F': F, 't':i, 'all_failed': tot_failed, 'updated_grid_copy': tmpG})#, 'tot_supplied': tot_unsupplied})
 
