@@ -56,7 +56,6 @@ else:
     append_solution_statistics = os.getcwd() + '\\' + sys.argv[1] + '_solution_statistics.csv'
 
 line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
-line_capacity_coef_scale = 5 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
@@ -90,6 +89,19 @@ if len(sys.argv) <= 4:
     set_decision_var_priorities = True
 else:
     set_decision_var_priorities = (sys.argv[4] != 'False' and sys.argv[4] != '0')
+
+
+# *********************************************************************
+# Define some more variables related to the problem size and difficulty
+# *********************************************************************
+if len(sys.argv) <= 5:
+    line_capacity_coef_scale = 15 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
+else:
+    line_capacity_coef_scale = float(sys.argv[5])
+
+
+
+
 
 
 # ****************************************************
@@ -143,8 +155,8 @@ def main_program():
 
         # export the obtained solution to a file
         # compute total supply per scenario
-        current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value()]
-        current_var_names = robust_opt_cplex.variables.get_names() + ['Objective']
+        current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value(), robust_opt_cplex.solution.MIP.get_mip_relative_gap()]
+        current_var_names = robust_opt_cplex.variables.get_names() + ['Objective', 'Opt. Gap.']
 
         tot_supply = [sum([current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
         tot_unsupplied = [scenarios[cur_scenario]*sum([nodes[('d', wkey[1])]-current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
@@ -168,6 +180,14 @@ def main_program():
     if print_debug:
         sys.stdout = orig_stdout
         f.close()
+
+
+    # Add final line for results file
+    if append_solution_statistics:
+            with open(append_solution_statistics, 'ab') as f:
+                best_incumbent = robust_opt_cplex.solution.get_objective_value()
+                writer = csv.writer(f)
+                writer.writerow([prop_cascade_cut, set_decision_var_priorities, clock(), "NA", best_incumbent])
 
 
 
@@ -419,7 +439,7 @@ def create_cplex_object():
         high_priority_list = [(cur_var, 100, robust_opt.order.branch_direction.up) for cur_var in dvar_name if 'X' in cur_var or 'c' in cur_var or 'Z' in cur_var]
         # all other variables will have priority 0 by default (https://www.ibm.com/support/knowledgecenter/en/SSSA5P_12.6.0/ilog.odms.cplex.help/refdotnetcplex/html/M_ILOG_CPLEX_Cplex_SetPriorities.htm)
         robust_opt.order.set(high_priority_list)  # a list of tuple triplets (variable, priority, direction)
-        print "NOTE: Setting branch priorities for decision variables X, Z, c"
+        #print "NOTE: Setting branch priorities for decision variables X, Z, c"
 
     # build constraints (all except for cascade inducing constraints)
 
