@@ -187,7 +187,7 @@ def main_program():
             with open(append_solution_statistics, 'ab') as f:
                 best_incumbent = robust_opt_cplex.solution.get_objective_value()
                 writer = csv.writer(f)
-                writer.writerow([prop_cascade_cut, set_decision_var_priorities, clock(), "NA", best_incumbent])
+                writer.writerow([line_capacity_coef_scale, set_decision_var_priorities, clock(), "NA", best_incumbent])
 
 
 
@@ -1003,7 +1003,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
         if append_solution_statistics:
             with open(append_solution_statistics, 'ab') as f:
                 writer = csv.writer(f)
-                writer.writerow([prop_cascade_cut, set_decision_var_priorities, time_spent_total, time_spent_cascade_sim, best_incumbent])
+                writer.writerow([line_capacity_coef_scale, set_decision_var_priorities, time_spent_total, time_spent_cascade_sim, best_incumbent])
         print "Curr sol=", sum(sup_demand), "Incumb=", best_incumbent, "Time on sim=", round(time_spent_cascade_sim), "Tot time", round(time_spent_total), "(", round(time_spent_cascade_sim/time_spent_total*100), "%) on sim"
         print "   Node  Left     Objective  IInf  Best Integer    Cuts/Bound    ItCnt     Gap         Variable B NodeID Parent  Depth"
         # consider later on to add: write incumbent solution to file.
