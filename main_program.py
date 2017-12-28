@@ -53,7 +53,11 @@ if len(sys.argv) == 1:
     instance_location = os.getcwd() + '\\case30\\'
 else:
     instance_location = os.getcwd() + '\\' + sys.argv[1] + '\\'
-    append_solution_statistics = "c:\\temp\\grid_cascade_output\\" + sys.argv[1] + '_solution_statistics.csv'
+    from time import strftime, clock, gmtime
+    append_solution_statistics = "c:\\temp\\grid_cascade_output\\" + strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - ' + sys.argv[1] + '_solution_statistics.csv'
+    with open(append_solution_statistics, 'ab') as f:
+                writer = csv.writer(f)
+                writer.writerow(["line_cost_coef_scale", "line_capacity_coef_scale", "set_decision_var_priorities", "runtime", "net_runtime_simulations", "best_incumbent"])
 
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
@@ -529,6 +533,9 @@ def create_cplex_object():
             gen_cap_lhs = [dvar_pos[('g', cur_node, scenario)], dvar_pos[('Z', cur_node)]]
             gen_cap_lhs_coef = [1, -bigM]
             robust_opt.linear_constraints.add(lin_expr = [[gen_cap_lhs, gen_cap_lhs_coef]], senses = "L", rhs = [0])
+
+    # Make sure that the establishment of edge ('X_', cur_edge) is directly linked to the decision ('c', cur_edge)
+    [robust_opt.linear_constraints.add(lin_expr = [[[dvar_pos[('X_', cur_edge)], dvar_pos[('c', cur_edge)]], [1, -1]]], senses = "L", rhs = [epsilon]) for cur_edge in all_edges if ('X_', cur_edge) in dvar_pos.keys()]
 
     # Last constraint - budget
     # Investment cost constraint sum(h_ij*cl_ij) + sum(h_i*cg_i + H_i*Z_i) + sum(H_ij*X_ij) <= C
