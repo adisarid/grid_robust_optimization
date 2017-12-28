@@ -6,7 +6,7 @@ python main_program.py case30 5 0.0 True 5 0.5
 python main_program.py case30 5 0.0 True 5 0.75
 python main_program.py case30 5 0.0 True 5 0.25
 python main_program.py case30 5 0.0 True 5 0.8
-
+python main_program.py case30 5 0.0 True 5 5
 
 
 
