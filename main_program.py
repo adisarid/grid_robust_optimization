@@ -55,7 +55,6 @@ else:
     instance_location = os.getcwd() + '\\' + sys.argv[1] + '\\'
     append_solution_statistics = "c:\\temp\\grid_cascade_output\\" + sys.argv[1] + '_solution_statistics.csv'
 
-line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
@@ -91,16 +90,19 @@ else:
     set_decision_var_priorities = (sys.argv[4] != 'False' and sys.argv[4] != '0')
 
 
-# *********************************************************************
-# Define some more variables related to the problem size and difficulty
-# *********************************************************************
+# **********************************************************************
+# Define some more parameters related to the problem size and difficulty
+# **********************************************************************
 if len(sys.argv) <= 5:
     line_capacity_coef_scale = 15 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 else:
     line_capacity_coef_scale = float(sys.argv[5])
 
 
-
+if len(sys.argv) <= 6:
+    line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
+else:
+    line_cost_coef_scale = float(sys.argv[6])
 
 
 
@@ -187,7 +189,7 @@ def main_program():
             with open(append_solution_statistics, 'ab') as f:
                 best_incumbent = robust_opt_cplex.solution.get_objective_value()
                 writer = csv.writer(f)
-                writer.writerow([line_capacity_coef_scale, set_decision_var_priorities, clock(), "NA", best_incumbent])
+                writer.writerow([line_cost_coef_scale, line_capacity_coef_scale, set_decision_var_priorities, clock(), "NA", best_incumbent])
 
 
 
@@ -1003,7 +1005,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
         if append_solution_statistics:
             with open(append_solution_statistics, 'ab') as f:
                 writer = csv.writer(f)
-                writer.writerow([line_capacity_coef_scale, set_decision_var_priorities, time_spent_total, time_spent_cascade_sim, best_incumbent])
+                writer.writerow([line_cost_coef_scale, line_capacity_coef_scale, set_decision_var_priorities, time_spent_total, time_spent_cascade_sim, best_incumbent])
         print "Curr sol=", sum(sup_demand), "Incumb=", best_incumbent, "Time on sim=", round(time_spent_cascade_sim), "Tot time", round(time_spent_total), "(", round(time_spent_cascade_sim/time_spent_total*100), "%) on sim"
         print "   Node  Left     Objective  IInf  Best Integer    Cuts/Bound    ItCnt     Gap         Variable B NodeID Parent  Depth"
         # consider later on to add: write incumbent solution to file.
