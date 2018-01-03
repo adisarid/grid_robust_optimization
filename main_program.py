@@ -141,7 +141,8 @@ def main_program():
         robust_opt_cplex.write("c:/temp/grid_cascade_output/tmp_robust_lp.lp")
 
     robust_opt_cplex.register_callback(MyLazy) # register the lazy callback
-    robust_opt_cplex.register_callback(IncumbentHeuristic)
+    robust_opt_cplex.register_callback(IncumbentHeuristic) # register the heuristic callback
+    robust_opt_cplex.register_callback(MyCutCallback) # registed the user cut callback
 
     time_spent_total = clock() # initialize solving time
     robust_opt_cplex.parameters.mip.tolerances.mipgap.set(epgap) # set target optimality gap
@@ -554,7 +555,7 @@ def create_cplex_object():
 
 
 # ****************************************************
-# ****** Add CPLEX lazy constraints ******************
+# **** Add CPLEX lazy constraints and cut callback ***
 # ****************************************************
 
 # Build lazycallbacks
@@ -576,8 +577,6 @@ class MyLazy(LazyConstraintCallback):
         global run_heuristic_callback
         global incumbent_solution_from_lazy
 
-        # The following should work in CPLEX version > 12.6
-        #print self.get_solution_source()
 
         all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
@@ -586,7 +585,7 @@ class MyLazy(LazyConstraintCallback):
         timestampstr = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
 
         if write_mid_run_res_files:
-            write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_callback_solution.csv')
+            write_names_values(current_solution, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_lazycallback_solution.csv')
 
         if not print_cfe_results==False:
             print_cfe_results = timestampstr
@@ -594,6 +593,48 @@ class MyLazy(LazyConstraintCallback):
         cfe_constraints = build_cfe_constraints(current_solution, timestampstr = print_cfe_results)
 
         [self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i]) for i in xrange(len(cfe_constraints['positions']))]
+
+
+# Build cut callback
+# This class is called when fractional solutions are held at B&B nodes
+# The function rounds the values of X, C, and Z, derives an infrastructure and adds
+# the required constraints, similarly to the lazycallback (but within the fractional solution stage)
+# this might prove to be slightly more efficient than the lazy callback, *if the cut is able to disqualify fractional solutions*
+
+class MyCutCallback(UserCutCallback):
+    def __call__(self): # read current integer solution and add violated valid inequality.
+        #print "I'm in the cut call back!"
+        global dvar_pos # position variable is global
+        global dvar_name # variable names for debugging
+        global epsilon
+        global bigM
+        global print_debug
+        global print_cfe_results
+        global run_heuristic_callback
+        global incumbent_solution_from_lazy
+
+
+        all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
+
+        current_solution = self.get_values()
+
+        # This is the rounding code which is the sole difference between the lazy callback and the cut callback
+        # If the variable is supposed to be an integer than round it, otherwise leave it untouched.
+        current_solution_rounded = [round(current_solution[dvar_pos[cur_name]]) if cur_name[0] in ['Z', 'F', 'X', 'C'] else current_solution[dvar_pos[cur_name]] for cur_name in dvar_pos.keys()]
+
+        timestampstr = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
+
+        if write_mid_run_res_files:
+            write_names_values(current_solution_rounded, dvar_name, 'c:/temp/grid_cascade_output/callback debug/' + timestampstr + 'current_cutcallback_solution.csv')
+
+        if not print_cfe_results==False:
+            print_cfe_results = timestampstr
+
+        cfe_constraints = build_cfe_constraints(current_solution_rounded, timestampstr = print_cfe_results)
+
+        [self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i]) for i in xrange(len(cfe_constraints['positions']))]
+
+
 
 
 def build_cfe_constraints(current_solution, timestampstr):
