@@ -16,8 +16,7 @@
 # ********* Import relevant libraries ************
 # ************************************************
 import cplex
-from cplex.callbacks import LazyConstraintCallback # import class for lazy callbacks
-from cplex.callbacks import HeuristicCallback
+from cplex.callbacks import LazyConstraintCallback, HeuristicCallback, UserCutCallback
 import sys
 import os
 import csv
@@ -148,8 +147,8 @@ def main_program():
     robust_opt_cplex.parameters.mip.tolerances.mipgap.set(epgap) # set target optimality gap
     robust_opt_cplex.parameters.timelimit.set(totruntime) # set run time limit
 
-    # enable multithread search
-    robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
+    # enable multithread search. Should be disabled if using UserCutCallbacks
+    #robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
 
     robust_opt_cplex.solve()  #solve the model
 
@@ -603,7 +602,6 @@ class MyLazy(LazyConstraintCallback):
 
 class MyCutCallback(UserCutCallback):
     def __call__(self): # read current integer solution and add violated valid inequality.
-        #print "I'm in the cut call back!"
         global dvar_pos # position variable is global
         global dvar_name # variable names for debugging
         global epsilon
@@ -631,8 +629,7 @@ class MyCutCallback(UserCutCallback):
             print_cfe_results = timestampstr
 
         cfe_constraints = build_cfe_constraints(current_solution_rounded, timestampstr = print_cfe_results)
-
-        [self.add(constraint = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i]) for i in xrange(len(cfe_constraints['positions']))]
+        [self.add(cut = cplex.SparsePair(cfe_constraints['positions'][i], cfe_constraints['coefficients'][i]), sense = "L", rhs = cfe_constraints['rhs'][i]) for i in xrange(len(cfe_constraints['positions']))]
 
 
 
