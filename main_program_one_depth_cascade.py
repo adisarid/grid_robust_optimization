@@ -32,9 +32,10 @@ import argparse
 parser = argparse.ArgumentParser(description = "Run a Power Grid Robust Optimization of 1-cascade depth (PGRO1).")
 parser.add_argument('--instance_location', help = "Provide the location for instance files (directory name)", type = str, default = "case30")
 parser.add_argument('--time_limit', help = "Set a time limit for CPLEX run (in hours)", type = float, default = 0.5)
-parser.add_argument('--opt_gap', help = "Optimality gap for CPLEX run (0.01 = 1%)", type = float, default = 0.01)
+parser.add_argument('--opt_gap', help = "Optimality gap for CPLEX run", type = float, default = 0.01) # 0.01 = 1%
 parser.add_argument('--budget', help = "Budget constraint for optimization problem", type = float, default = 100)
 parser.add_argument('--print_lp', help = "Export c:/temp/grid_cascade_output/tmp_robust_1_cascade.lp", action = "store_true")
+parser.add_argument('--print_debug_function_tracking', help = "Print a message upon entering each function", action = "store_true")
 # ... add additional arguments as required here ..
 args = parser.parse_args()
 
@@ -216,9 +217,8 @@ def write_names_values(current_solution, variable_names, csvfilename):
 # ****************************************************
 # ****** Build CPLEX problem *************************
 # ****************************************************
-# STOPPED HERE 06/01/2018
 def build_cplex_problem():
-    if print_debug_function_tracking:
+    if args.print_debug_function_tracking:
         print "ENTERED: build_cplex_problem()"
     global dvar_pos # used as global to allow access across all functions
     global dvar_name
@@ -251,89 +251,75 @@ def build_cplex_problem():
 
     # by nodes
     all_nodes = [i[1] for i in nodes.keys() if i[0] == 'd']
-    for cur_node in all_nodes:
-        for cur_scenario in all_scenarios:
-            # generation variable (g)
-            dvar_name.append('g_' + cur_node + 's' + cur_scenario)
-            dvar_pos[('g', cur_node, cur_scenario)] = len(dvar_name)-1
-            dvar_obj_coef.append(0)
-            dvar_lb.append(0)
-            dvar_ub.append(nodes[('c', cur_node)] + nodes[('gen_up_ub', cur_node)])
-            dvar_type.append('C')
 
-            # unsuppled demand variable (w)
-            if nodes[('d', cur_node)] > 0:
-                dvar_name.append('w_' + cur_node + 's' + cur_scenario)
-                dvar_pos[('w', cur_node, cur_scenario)] = len(dvar_name)-1
-                dvar_obj_coef.append(scenarios[('s_pr', cur_scenario)]) # scenario relative weight
-                dvar_lb.append(0)
-                dvar_ub.append(nodes[('d', cur_node)])
-                dvar_type.append('C')
+    # generation variables (g_i_t_s)
+	dvar_name = ['g_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_obj_coef = [0 for i in dvar_name]
+	dvar_lb = [0 for i in dvar_name]
+	dvar_ub = [nodes[('c', i)] + nodes[('gen_up_ub', i)] for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_type = ['C' for i in dvar_name]
 
-            # phase angle (theta)
-            dvar_name.append('theta_' + cur_node + 's' + cur_scenario)
-            dvar_pos[('theta', cur_node, cur_scenario)] = len(dvar_name)-1
-            dvar_obj_coef.append(0)
-            dvar_lb.append(0)
-            dvar_ub.append(360)
-            dvar_type.append('C')
+	# un-supplied demand variable (w_i_t_s)
+	dvar_name += ['w_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_obj_coef += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_lb += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_ub += [nodes[('d', i)] for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_type += ['C' for i in all_nodes for t in [1,2] for s in all_scenarios]
 
-        # capacity upgrade of node (independent of scenario)
-        dvar_name.append('c_' + cur_node)
-        dvar_pos[('c', cur_node)] = len(dvar_name)-1
-        dvar_obj_coef.append(0)
-        dvar_lb.append(0)
-        dvar_ub.append(nodes[('gen_up_ub', cur_node)])
-        dvar_type.append('C')
+    # phase angle (theta_i_t_s) variables
+	dvar_name += ['theta_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_obj_coef += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_lb += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_ub += [360 for i in all_nodes for t in [1,2] for s in all_scenarios]
+	dvar_type += ['C' for i in all_nodes for t in [1,2] for s in all_scenarios]
 
-        # establish backup capacity at node i
-        dvar_name.append('Z_' + cur_node)
-        dvar_pos[('Z', cur_node)] = len(dvar_name)-1
-        dvar_obj_coef.append(0)
-        dvar_lb.append(0)
-        dvar_ub.append(1)
-        dvar_type.append('B')
+    # capacity upgrade of node
+	dvar_name += ['c_i' + str(i) for i in all_nodes]
+	dvar_obj_coef += [0 for i in all_nodes]
+	dvar_lb += [0 for i in all_nodes]
+	dvar_ub += [nodes[('gen_up_ub', i)] for i in all_nodes]
+	dvar_type += ['C' for i in all_nodes]
+
+	# establish backup capacity at node i
+	dvar_name += ['Z_i' + str(i) for i in all_nodes]
+	dvar_obj_coef += [0 for i in all_nodes]
+	dvar_lb += [0 for i in all_nodes]
+	dvar_ub += [1 for i in all_nodes]
+	dvar_type += ['B' for i in all_nodes]
 
     # by edges
     all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
-    for cur_edge in all_edges:
-        edge_str = str(cur_edge).replace(', ', '_').replace("'", "").replace('(', '').replace(')','')
-        for cur_scenario in all_scenarios:
-            # define flow variabels
-            dvar_name.append('f_' + edge_str + 's' + cur_scenario)
-            dvar_pos[('f', cur_edge, cur_scenario)] = len(dvar_name)-1
-            dvar_obj_coef.append(0)
-            dvar_lb.append(-tot_demand)
-            dvar_ub.append(tot_demand)
-            dvar_type.append('C')
 
-            # define failed edges
-            dvar_name.append('F_' + edge_str + 's' + cur_scenario)
-            dvar_pos[('F', cur_edge, cur_scenario)] = len(dvar_name)-1
-            dvar_obj_coef.append(0)
-            dvar_lb.append(0)
-            dvar_ub.append(1)
-            dvar_type.append('B')
+    # define flow variables
+    dvar_name += ['f_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t' + str(t) for edge in all_edges for t in [1,2]]
+	dvar_obj_coef += [0 for edge in all_edges for t in [1,2]]
+	dvar_lb += [-tot_demand for edge in all_edges for t in [1,2]]
+	dvar_ub += [tot_demand for edge in all_edges for t in [1,2]]
+	dvar_type += ['C' for egge in all_edges for t in [1,2]]
 
+    # define failed edges (only at initial failure and at the first cascade)
+    dvar_name += ['F_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t' + str(t) + '_s' + str(s) for edge in all_edges for s in all_scenarios for t in [0,1]]
+	dvar_obj_coef += [0 for edge in all_edges for s in all_scenarios for t in [0,1]]
+	dvar_lb += [0 for edge in all_edges for s in all_scenarios for t in [0,1]]
+	dvar_ub += [1 for edge in all_edges for s in all_scenarios for t in [0,1]]
+	dvar_type += ['B' for edge in all_edges for s in all_scenarios for t in [0,1]]
 
-        # define capacity upgrade constraints
-        dvar_name.append('c_' + edge_str)
-        dvar_pos[('c', cur_edge)] = len(dvar_name)-1
-        dvar_obj_coef.append(0)
-        dvar_lb.append(0)
-        dvar_ub.append(tot_demand)
-        dvar_type.append('B') # changed to binary variable
+    # define capacity upgrade constraints
+	dvar_name += ['c_i' + edge[0] + '_j' + edge[1] for edge in all_edges]
+	dvar_obj_coef += [0 for edge in all_edges]
+	dvar_lb += [0 for edge in all_edges]
+	dvar_ub += [tot_demand for edge in all_edges]
+	dvar_type += ['C' for edge in all_edges]
 
+    # define variables for establishing a new edge (only if upgrade cost > 0 otherwise the edge already exists)
+	dvar_name += ['X_i' + edge[0] + 'j' + edge[1] for edge in all_edges if edges[('H',) + edge] > 0]
+	dvar_obj_coef += [0 for edge in all_edges if edges[('H',) + edge][0] > 0]
+	dvar_lb += [0 for edge in all_edges if edges[('H',) + edge][0] > 0]
+	dvar_ub += [1 for edge in all_edges if edges[('H',) + edge][0] > 0]
+	dvar_type += ['B' for edge in all_edges if edges[('H',) + edge][0] > 0]
 
-
-        # establish new edge (only if upgrade cost > 0 otherwise this edge already exists and it is not upgradable, no need to add variable)
-        if cur_edge in [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]:
-            dvar_name.append('X_' + edge_str)
-            dvar_pos[('X_', cur_edge)] = len(dvar_name)-1
-            dvar_obj_coef.append(0)
-            dvar_lb.append(0)
-            dvar_ub.append(1)
-            dvar_type.append('B')
+    # as final step: define the dvar_pos dictionary as
+	dvar_pos = {dvar_name[i]:i for i in range(len(dvar_name))}
 
     # create cplex object based on dvar_pos, dvar_obj_coef, dvar_lb, dvar_ub, dvar_type
     robust_opt = create_cplex_object()
@@ -349,7 +335,7 @@ def create_cplex_object():
     Based on dvar_pos, dvar_obj_coef, dvar_lb, dvar_ub, dvar_type, dvar_name, dvar_priorities
     This is a service function called by build_cplex_problem, and also by the Heuristic callback
     """
-    if print_debug_function_tracking:
+    if args.print_debug_function_tracking:
         print "ENTERED: create_cplex_object()"
     # initialize cplex object
     robust_opt = cplex.Cplex()
@@ -526,7 +512,7 @@ def build_cfe_constraints(current_solution, timestampstr):
     if the input timestampstr is not False then a csv file with the failed and survivde edges will be saved
 
     """
-    if print_debug_function_tracking:
+    if args.print_debug_function_tracking:
         print "ENTERED: build_problem.build_cfe_constraints()"
     global epsilon
     global dvar_name
@@ -649,7 +635,7 @@ def update_grid(G, failed_edges):
     Function to update the existing graph by omitting failed_edges from it and re-computing demand and generation in each component.
     Modifies the graph G (a networkx object, with custom fields 'demand', 'gen_cap' and 'generated')
     """
-    if print_debug_function_tracking:
+    if args.print_debug_function_tracking:
         print "ENTERED: cascade_simulator_aux.update_grid()"
     # First step, go over failed edges and omit them from G
     G.remove_edges_from([edge for edge in failed_edges])
@@ -705,7 +691,7 @@ def cfe(G, init_fail_edges, write_solution_file = False, simulation_complete_run
     Returns final state of the grid after cascading failure evolution is complete.
     """
 
-    if print_debug_function_tracking:
+    if args.print_debug_function_tracking:
         print "ENTERED: cascade_simulator_aux.cfe()"
     # initialize the list of failed edges at each iteration
     F = dict()
@@ -759,11 +745,11 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     # Then, use previous_find_flow.linear_constraints.delete
     # and previous_find_flow.variables.delete
     # to delete the unnecessary variables and constraints, then call solve() again
-    if print_debug_function_tracking:
+    if args.print_debug_function_tracking:
         print "ENTERED: cascade_simulator_aux.grid_flow_update()"
     # First step, go over failed edges and omit them from G, rebalance components with demand and generation
     update_grid(G, failed_edges) # Each component of G will balance demand and generation capacities after this line
-    if print_debug_function_tracking:
+    if args.print_debug_function_tracking:
         print "Number of connected components in G = ", nx.number_connected_components(G)
     # Initialize cplex internal flow problem
     find_flow = cplex.Cplex() # create cplex instance
@@ -890,7 +876,7 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
     global best_incumbent
     global simulation_complete_run
 
-    if print_debug_function_tracking:
+    if args.print_debug_function_tracking:
         print "ENTERED: compute_casecade.compute_failure()"
     init_grid = build_nx_grid(nodes, edges, current_solution, dvar_pos) # build initial grid
     #print "DEBUG: Feeding into cfe algorithm (compute_cascade.compute_failed_inconsistent()) - edges:", init_grid.edges()
@@ -946,7 +932,7 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     Function has been optimized to add the nodes and edges as a bunch, using a single command and doing the prep work
     via list comprehension of the edges and nodes.
     """
-    if print_debug_function_tracking:
+    if args.print_debug_function_tracking:
         print "ENTERED: compute_casecade.build_nx_grid()"
     G = nx.Graph() # initialize empty graph
 
