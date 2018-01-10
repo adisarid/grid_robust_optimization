@@ -77,39 +77,39 @@ def main_program():
     # enable multithread search
     robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
 
-    robust_opt_cplex.solve()  #solve the model
-
-    print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
-    # the following line prints the corresponding status string
-    print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
-    if robust_opt_cplex.solution.get_status != 103:
-        print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
-        print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
-
-        # export the obtained solution to a file
-        # compute total supply per scenario
-        current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value(), robust_opt_cplex.solution.MIP.get_mip_relative_gap()]
-        current_var_names = robust_opt_cplex.variables.get_names() + ['Objective', 'Opt. Gap.']
-
-        tot_supply = [sum([current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-        tot_unsupplied = [scenarios[cur_scenario]*sum([nodes[('d', wkey[1])]-current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-        tot_supply_sce = ['supply_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-        tot_supply_missed = ['un_supplied_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-
-        # add some info to results
-        current_solution = current_solution + tot_supply + tot_unsupplied
-        current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
-
-        print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
-        print "Supply per scenario:", {tot_supply_sce[i]: tot_supply[i] for i in xrange(len(tot_supply))}
-        print "Supply missed per scenario:", {tot_supply_missed[i]: tot_unsupplied[i] for i in xrange(len(tot_supply_sce))}
-
-        # write results to a file
-        timestamp = time.strftime('%d-%m-%Y %H-%M-%S-', time.gmtime()) + str(round(time.clock(), 3)) + ' - '
-        write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
-
-        # Finish
-        print "*** Program completed. ***"
+##    robust_opt_cplex.solve()  #solve the model
+##
+##    print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
+##    # the following line prints the corresponding status string
+##    print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
+##    if robust_opt_cplex.solution.get_status != 103:
+##        print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
+##        print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
+##
+##        # export the obtained solution to a file
+##        # compute total supply per scenario
+##        current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value(), robust_opt_cplex.solution.MIP.get_mip_relative_gap()]
+##        current_var_names = robust_opt_cplex.variables.get_names() + ['Objective', 'Opt. Gap.']
+##
+##        tot_supply = [sum([current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+##        tot_unsupplied = [scenarios[cur_scenario]*sum([nodes[('d', wkey[1])]-current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+##        tot_supply_sce = ['supply_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+##        tot_supply_missed = ['un_supplied_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+##
+##        # add some info to results
+##        current_solution = current_solution + tot_supply + tot_unsupplied
+##        current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
+##
+##        print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
+##        print "Supply per scenario:", {tot_supply_sce[i]: tot_supply[i] for i in xrange(len(tot_supply))}
+##        print "Supply missed per scenario:", {tot_supply_missed[i]: tot_unsupplied[i] for i in xrange(len(tot_supply_sce))}
+##
+##        # write results to a file
+##        timestamp = time.strftime('%d-%m-%Y %H-%M-%S-', time.gmtime()) + str(round(time.clock(), 3)) + ' - '
+##        write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
+##
+##        # Finish
+##        print "*** Program completed. ***"
 
 
 
@@ -218,8 +218,16 @@ def write_names_values(current_solution, variable_names, csvfilename):
 # ****** Build CPLEX problem *************************
 # ****************************************************
 def build_cplex_problem():
+    """
+    The function builds all the required decision variables,
+    creates global variables like variables names, coefficients, bounds, and types
+    Finally it calls the create_cplex_object function (for the creation of constraints).
+    The function returns the completed cplex object with all variables and constraints, and a dictionary
+    for the location of each variable (in the variable vector).
+    """
     if args.print_debug_function_tracking:
         print "ENTERED: build_cplex_problem()"
+
     global dvar_pos # used as global to allow access across all functions
     global dvar_name
     global dvar_obj_coef
@@ -253,73 +261,74 @@ def build_cplex_problem():
     all_nodes = [i[1] for i in nodes.keys() if i[0] == 'd']
 
     # generation variables (g_i_t_s)
-	dvar_name = ['g_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_obj_coef = [0 for i in dvar_name]
-	dvar_lb = [0 for i in dvar_name]
-	dvar_ub = [nodes[('c', i)] + nodes[('gen_up_ub', i)] for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_type = ['C' for i in dvar_name]
+    dvar_name = ['g_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_obj_coef = [0 for i in dvar_name]
+    dvar_lb = [0 for i in dvar_name]
+    dvar_ub = [nodes[('c', i)] + nodes[('gen_up_ub', i)] for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_type = ['C' for i in dvar_name]
 
 	# un-supplied demand variable (w_i_t_s)
-	dvar_name += ['w_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_obj_coef += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_lb += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_ub += [nodes[('d', i)] for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_type += ['C' for i in all_nodes for t in [1,2] for s in all_scenarios]
+    tmp_f = lambda t, s: scenarios[('s_pr', s)] if t==2 else 0
+    dvar_name += ['w_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_obj_coef += [tmp_f(t,s) for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_lb += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_ub += [nodes[('d', i)] for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_type += ['C' for i in all_nodes for t in [1,2] for s in all_scenarios]
 
     # phase angle (theta_i_t_s) variables
-	dvar_name += ['theta_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_obj_coef += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_lb += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_ub += [360 for i in all_nodes for t in [1,2] for s in all_scenarios]
-	dvar_type += ['C' for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_name += ['theta_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_obj_coef += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_lb += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_ub += [360 for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_type += ['C' for i in all_nodes for t in [1,2] for s in all_scenarios]
 
     # capacity upgrade of node
-	dvar_name += ['c_i' + str(i) for i in all_nodes]
-	dvar_obj_coef += [0 for i in all_nodes]
-	dvar_lb += [0 for i in all_nodes]
-	dvar_ub += [nodes[('gen_up_ub', i)] for i in all_nodes]
-	dvar_type += ['C' for i in all_nodes]
+    dvar_name += ['c_i' + str(i) for i in all_nodes]
+    dvar_obj_coef += [0 for i in all_nodes]
+    dvar_lb += [0 for i in all_nodes]
+    dvar_ub += [nodes[('gen_up_ub', i)] for i in all_nodes]
+    dvar_type += ['C' for i in all_nodes]
 
 	# establish backup capacity at node i
-	dvar_name += ['Z_i' + str(i) for i in all_nodes]
-	dvar_obj_coef += [0 for i in all_nodes]
-	dvar_lb += [0 for i in all_nodes]
-	dvar_ub += [1 for i in all_nodes]
-	dvar_type += ['B' for i in all_nodes]
+    dvar_name += ['Z_i' + str(i) for i in all_nodes]
+    dvar_obj_coef += [0 for i in all_nodes]
+    dvar_lb += [0 for i in all_nodes]
+    dvar_ub += [1 for i in all_nodes]
+    dvar_type += ['B' for i in all_nodes]
 
     # by edges
     all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
     # define flow variables
-    dvar_name += ['f_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t' + str(t) for edge in all_edges for t in [1,2]]
-	dvar_obj_coef += [0 for edge in all_edges for t in [1,2]]
-	dvar_lb += [-tot_demand for edge in all_edges for t in [1,2]]
-	dvar_ub += [tot_demand for edge in all_edges for t in [1,2]]
-	dvar_type += ['C' for egge in all_edges for t in [1,2]]
+    dvar_name += ['f_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t' + str(t) + '_s' + str(s) for edge in all_edges for t in [1,2] for s in all_scenarios]
+    dvar_obj_coef += [0 for edge in all_edges for t in [1,2] for s in all_scenarios]
+    dvar_lb += [-tot_demand for edge in all_edges for t in [1,2] for s in all_scenarios]
+    dvar_ub += [tot_demand for edge in all_edges for t in [1,2] for s in all_scenarios]
+    dvar_type += ['C' for egge in all_edges for t in [1,2] for s in all_scenarios]
 
     # define failed edges (only at initial failure and at the first cascade)
     dvar_name += ['F_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t' + str(t) + '_s' + str(s) for edge in all_edges for s in all_scenarios for t in [0,1]]
-	dvar_obj_coef += [0 for edge in all_edges for s in all_scenarios for t in [0,1]]
-	dvar_lb += [0 for edge in all_edges for s in all_scenarios for t in [0,1]]
-	dvar_ub += [1 for edge in all_edges for s in all_scenarios for t in [0,1]]
-	dvar_type += ['B' for edge in all_edges for s in all_scenarios for t in [0,1]]
+    dvar_obj_coef += [0 for edge in all_edges for s in all_scenarios for t in [0,1]]
+    dvar_lb += [0 for edge in all_edges for s in all_scenarios for t in [0,1]]
+    dvar_ub += [1 for edge in all_edges for s in all_scenarios for t in [0,1]]
+    dvar_type += ['B' for edge in all_edges for s in all_scenarios for t in [0,1]]
 
     # define capacity upgrade constraints
-	dvar_name += ['c_i' + edge[0] + '_j' + edge[1] for edge in all_edges]
-	dvar_obj_coef += [0 for edge in all_edges]
-	dvar_lb += [0 for edge in all_edges]
-	dvar_ub += [tot_demand for edge in all_edges]
-	dvar_type += ['C' for edge in all_edges]
+    dvar_name += ['c_i' + edge[0] + '_j' + edge[1] for edge in all_edges]
+    dvar_obj_coef += [0 for edge in all_edges]
+    dvar_lb += [0 for edge in all_edges]
+    dvar_ub += [tot_demand for edge in all_edges]
+    dvar_type += ['C' for edge in all_edges]
 
     # define variables for establishing a new edge (only if upgrade cost > 0 otherwise the edge already exists)
-	dvar_name += ['X_i' + edge[0] + 'j' + edge[1] for edge in all_edges if edges[('H',) + edge] > 0]
-	dvar_obj_coef += [0 for edge in all_edges if edges[('H',) + edge][0] > 0]
-	dvar_lb += [0 for edge in all_edges if edges[('H',) + edge][0] > 0]
-	dvar_ub += [1 for edge in all_edges if edges[('H',) + edge][0] > 0]
-	dvar_type += ['B' for edge in all_edges if edges[('H',) + edge][0] > 0]
+    dvar_name += ['X_i' + edge[0] + 'j' + edge[1] for edge in all_edges if edges[('H',) + edge] > 0]
+    dvar_obj_coef += [0 for edge in all_edges if (('H',) + edge) in edges.keys() and edges[('H',) + edge] > 0]
+    dvar_lb += [0 for edge in all_edges if (('H',) + edge) in edges.keys() and edges[('H',) + edge] > 0]
+    dvar_ub += [1 for edge in all_edges if (('H',) + edge) in edges.keys() and edges[('H',) + edge] > 0]
+    dvar_type += ['B' for edge in all_edges if (('H',) + edge) in edges.keys() and edges[('H',) + edge] > 0]
 
     # as final step: define the dvar_pos dictionary as
-	dvar_pos = {dvar_name[i]:i for i in range(len(dvar_name))}
+    dvar_pos = {dvar_name[i]:i for i in range(len(dvar_name))}
 
     # create cplex object based on dvar_pos, dvar_obj_coef, dvar_lb, dvar_ub, dvar_type
     robust_opt = create_cplex_object()
@@ -344,113 +353,48 @@ def create_cplex_object():
     # building the decision variables within object
     robust_opt.variables.add(obj = dvar_obj_coef, lb = dvar_lb, ub = dvar_ub, types = dvar_type, names = dvar_name)
 
-    if set_decision_var_priorities:
-        # set priorities for all infrastructure variables (c, X, Z)
-        high_priority_list = [(cur_var, 100, robust_opt.order.branch_direction.up) for cur_var in dvar_name if 'X' in cur_var or 'c' in cur_var or 'Z' in cur_var]
-        # all other variables will have priority 0 by default (https://www.ibm.com/support/knowledgecenter/en/SSSA5P_12.6.0/ilog.odms.cplex.help/refdotnetcplex/html/M_ILOG_CPLEX_Cplex_SetPriorities.htm)
-        robust_opt.order.set(high_priority_list)  # a list of tuple triplets (variable, priority, direction)
-        #print "NOTE: Setting branch priorities for decision variables X, Z, c"
+    # *** build constraints ***
+    # auxiliary lambda function: outputs a list of edges going out or incoming into node
+    assoc_edges = lambda i,direction: get_associated_edges(i, all_edges)['in'] if direction == "in" else get_associated_edges(i, all_edges)['out']
 
-    # build constraints (all except for cascade inducing constraints)
+    # conservation of flow for t=1:
+    # sum(f_j_i_t=1_s) + sum(f_i_j_t=1_s) + g_i - w_i = 0 (total incoming - outgoing + generated - supplied = 0)
+    flow_lhs = [[dvar_pos['f_i' + in_edge[0] + '_j' + in_edge[1] + '_t1' + '_s' + s] for in_edge in assoc_edges(i, 'in')] + \
+                [dvar_pos['f_i' + out_edge[0] + '_j' + out_edge[1] + '_t1' + '_s' + s] for out_edge in assoc_edges(i, 'out')] + \
+                [dvar_pos['g_i' + i + '_t1' + '_s' + s]] + \
+                [dvar_pos['w_i' + i + '_t1' + '_s' + s]] for i in all_nodes for s in all_scenarios]
+    flow_lhs_coef = [[1 for in_edge in assoc_edges(i, 'in')] + \
+                     [-1 for out_edge in assoc_edges(i, 'out')] + \
+                     [1, -1] for i in all_nodes for s in all_scenarios]
+    flow_constraints = [[flow_lhs[constraint], flow_lhs_coef[constraint]] for constraint in range(len(flow_lhs))]
+    robust_opt.linear_constraints.add(lin_expr = flow_constraints, senses = "E"*len(flow_constraints), rhs = [0]*len(flow_constraints))
+    sys.exit() # STOPPED HERE
+    # reactive power constraints for t=1, existing non-failed edges:
 
-    for cur_node in all_nodes:
-        flow_lhs = []
-        flow_lhs_coef = []
-        flow_rhs = []
-        assoc_edges = get_associated_edges(cur_node, all_edges)
-        for scenario in all_scenarios:
-            # Conservation of flow sum(f_ji)- sum(f_ij) + g_i - w_i = 0 (total incoming - outgoing + generated - supplied = 0)
-            flow_lhs = [dvar_pos[('f', edge, scenario)] for edge in assoc_edges['in']] + [dvar_pos[('f', edge, scenario)] for edge in assoc_edges['out']] + \
-                       [dvar_pos[('g', cur_node, scenario)]]
-            flow_lhs_coef = [1 for edge in assoc_edges['in']] + [-1 for edge in assoc_edges['out']] + [1]
-            if nodes[('d', cur_node)] > 0:
-                # case this node (has demand)
-                flow_lhs += [dvar_pos[('w', cur_node, scenario)]]
-                flow_lhs_coef += [-1]
+    # reactive power constraints for t=1, upgradable edges:
 
-                # w_i^s <= d_i
-                max_sup_lhs = [dvar_pos[('w', cur_node, scenario)]]
-                max_sup_lhs_coef = [1]
-                robust_opt.linear_constraints.add(lin_expr = [[max_sup_lhs, max_sup_lhs_coef]], senses = "L", rhs = [nodes[('d', cur_node)]])
+    # cascade effects occurring at t=1:
 
+    # transmission capacity - established edges:
 
-            robust_opt.linear_constraints.add(lin_expr = [[flow_lhs, flow_lhs_coef]], senses = "E", rhs = [0])
+    # transmission capacity - failed edges after first cascade:
 
-            for cur_edge in assoc_edges['out']:
-                # using only outgoing edges incoming will be covered as "outgoing" at a different node
-                # First set failed edges according to input data
-                if cur_edge in scenarios[('s', scenario)]:
-                    init_failures = [dvar_pos[('F', cur_edge, scenario)]]
-                    init_failures_coef = [1]
-                    robust_opt.linear_constraints.add(lin_expr = [[init_failures, init_failures_coef]], senses = "E", rhs = [1])
+    # limit supply (do not exceed demand at t=2) (*different from previous approach - not strict '-' here):
 
+    # generation capacity t=1:
 
-                # Phase angle constraints -M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*F_ij   only for existing edges
-                if not (cur_edge in [(i[1], i[2]) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]):
-                    # Less than equal side
-                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
-                    phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], -bigM]
-                    robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "L", rhs = [0])
-                    # Greater than equal side
-                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
-                    phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], bigM]
-                    robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "G", rhs = [0])
+    # conservation of flow for t=2:
 
-                # Phase angle for potential edges -M*(1-X_ij)-M*F_ij <= theta_i-theta_j-x_ij*f_ij <= M*(1-X_ij) + M*F_ij     *** notice that X is not dependent in scenario but theta and f do depend
-                if cur_edge in [(i[1], i[2]) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]:
-                    # only run if edge has a fixed establishment cost parameter (H)
-                    # Less than equal side
-                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)], dvar_pos[('F', cur_edge, scenario)]]
-                    phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], bigM, -bigM]
-                    robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "L", rhs = [bigM])
-                    # Greater than equal side
-                    phase_lhs = [dvar_pos[('theta', cur_node, scenario)], dvar_pos[('theta', cur_edge[1], scenario)], dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)], dvar_pos[('F', cur_edge, scenario)]]
-                    phase_lhs_coef = [1, -1, -edges[('x', ) + (cur_edge)], -bigM, bigM]
-                    robust_opt.linear_constraints.add(lin_expr = [[phase_lhs, phase_lhs_coef]], senses = "G", rhs = [-bigM])
+    # generation capacity t=2:
 
-                    # Transmission capacity for potential edges -M*X_ij <= f_ij <= M*X_ij
-                    # Less than equal side
-                    disable_flow_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)]]
-                    disable_flow_lhs_coef = [1, -bigM]
-                    robust_opt.linear_constraints.add(lin_expr = [[disable_flow_lhs, disable_flow_lhs_coef]], senses = "L", rhs = [0])
-                    # Greater than equal side
-                    disable_flow_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('X_', cur_edge)]]
-                    disable_flow_lhs_coef = [1, bigM]
-                    robust_opt.linear_constraints.add(lin_expr = [[disable_flow_lhs, disable_flow_lhs_coef]], senses = "G", rhs = [0])
+    # reactive power constraints for t=2, existing non-failed edges
 
-                # Don't use failed edges -M*(1-F_ij) <= f_ij <= M*(1-F_ij)
-                # Less than equal side
-                fail_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
-                fail_lhs_coef = [1, bigM]
-                robust_opt.linear_constraints.add(lin_expr = [[fail_lhs, fail_lhs_coef]], senses = "L", rhs = [bigM])
+    # transmission capacity - within capacity after 1st cascade, i.e., t=2 (*different from previous approach*):
 
-                # Greater than equal side
-                fail_lhs = [dvar_pos[('f', cur_edge, scenario)], dvar_pos[('F', cur_edge, scenario)]]
-                fail_lhs_coef = [1, -bigM]
-                robust_opt.linear_constraints.add(lin_expr = [[fail_lhs, fail_lhs_coef]], senses = "G", rhs = [-bigM])
+    # reactive power constraints for t=2, upgradable edges:
 
-            # Finished iterating over edges, continuing to iterate over scenarios, and nodes
-            # Generation capacity g_i <= c0_i + cg_i
-            gen_cap_lhs = [dvar_pos[('g', cur_node, scenario)], dvar_pos[('c', cur_node)]]
-            gen_cap_lhs_coef = [1, -1]
-            robust_opt.linear_constraints.add(lin_expr = [[gen_cap_lhs, gen_cap_lhs_coef]], senses = "L", rhs = [nodes[('c', cur_node)]])
-            # Generation capacity g_i <= M*Z_i
-            gen_cap_lhs = [dvar_pos[('g', cur_node, scenario)], dvar_pos[('Z', cur_node)]]
-            gen_cap_lhs_coef = [1, -bigM]
-            robust_opt.linear_constraints.add(lin_expr = [[gen_cap_lhs, gen_cap_lhs_coef]], senses = "L", rhs = [0])
+    # investment cost constraint
 
-    # Make sure that the establishment of edge ('X_', cur_edge) is directly linked to the decision ('c', cur_edge)
-    [robust_opt.linear_constraints.add(lin_expr = [[[dvar_pos[('X_', cur_edge)], dvar_pos[('c', cur_edge)]], [1, -1]]], senses = "L", rhs = [epsilon]) for cur_edge in all_edges if ('X_', cur_edge) in dvar_pos.keys()]
-
-    # Last constraint - budget
-    # Investment cost constraint sum(h_ij*cl_ij) + sum(h_i*cg_i + H_i*Z_i) + sum(H_ij*X_ij) <= C
-    budget_lhs = [dvar_pos[('c', cur_edge)] for cur_edge in all_edges] + [dvar_pos[('c', cur_node)] for cur_node in all_nodes] + \
-                 [dvar_pos[('Z', cur_node)] for cur_node in all_nodes if ('H', cur_node) in nodes.keys()] + \
-                 [dvar_pos[('X_', (i[1], i[2]))] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
-    budget_lhs_coef = [line_cost_coef_scale*edges[('h',) + cur_edge] for cur_edge in all_edges] + [nodes[('h', cur_node)] for cur_node in all_nodes] + \
-                 [nodes[('H',cur_node)] for cur_node in all_nodes if ('H',cur_node) in nodes.keys()] + \
-                 [edges[('H',)+(i[1], i[2])] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
-    robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [params['C']])
 
     return robust_opt
 
