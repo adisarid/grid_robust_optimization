@@ -137,3 +137,7 @@ vignettes/*.pdf
 # temporary test file
 tmp*.py
 *.pdf
+
+
+# ignore credentials
+send_email_credentials.json
