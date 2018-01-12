@@ -141,3 +141,4 @@ tmp*.py
 
 # ignore credentials
 send_email_credentials.json
+gmail-python-email-send.json
