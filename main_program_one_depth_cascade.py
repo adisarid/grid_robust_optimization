@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser(description = "Run a Power Grid Robust Optimiza
 parser.add_argument('--instance_location', help = "Provide the location for instance files (directory name)", type = str, default = "case30")
 parser.add_argument('--time_limit', help = "Set a time limit for CPLEX run (in hours)", type = float, default = 0.5)
 parser.add_argument('--opt_gap', help = "Optimality gap for CPLEX run", type = float, default = 0.01) # 0.01 = 1%
-parser.add_argument('--budget', help = "Budget constraint for optimization problem", type = float, default = 100)
+parser.add_argument('--budget', help = "Budget constraint for optimization problem", type = float, default = 100.0)
 parser.add_argument('--print_lp', help = "Export c:/temp/grid_cascade_output/tmp_robust_1_cascade.lp", action = "store_true")
 parser.add_argument('--print_debug_function_tracking', help = "Print a message upon entering each function", action = "store_true")
 # ... add additional arguments as required here ..
@@ -77,7 +77,7 @@ def main_program():
     # enable multithread search
     robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
 
-##    robust_opt_cplex.solve()  #solve the model
+    robust_opt_cplex.solve()  #solve the model
 ##
 ##    print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
 ##    # the following line prints the corresponding status string
@@ -313,7 +313,7 @@ def build_cplex_problem():
     dvar_ub += [1 for edge in all_edges for s in all_scenarios for t in [0,1]]
     dvar_type += ['B' for edge in all_edges for s in all_scenarios for t in [0,1]]
 
-    # define capacity upgrade constraints
+    # define capacity upgrade variables
     dvar_name += ['c_i' + edge[0] + '_j' + edge[1] for edge in all_edges]
     dvar_obj_coef += [0 for edge in all_edges]
     dvar_lb += [0 for edge in all_edges]
@@ -321,7 +321,7 @@ def build_cplex_problem():
     dvar_type += ['C' for edge in all_edges]
 
     # define variables for establishing a new edge (only if upgrade cost > 0 otherwise the edge already exists)
-    dvar_name += ['X_i' + edge[0] + 'j' + edge[1] for edge in all_edges if edges[('H',) + edge] > 0]
+    dvar_name += ['X_i' + edge[0] + '_j' + edge[1] for edge in all_edges if edges[('H',) + edge] > 0]
     dvar_obj_coef += [0 for edge in all_edges if (('H',) + edge) in edges.keys() and edges[('H',) + edge] > 0]
     dvar_lb += [0 for edge in all_edges if (('H',) + edge) in edges.keys() and edges[('H',) + edge] > 0]
     dvar_ub += [1 for edge in all_edges if (('H',) + edge) in edges.keys() and edges[('H',) + edge] > 0]
@@ -358,47 +358,151 @@ def create_cplex_object():
     assoc_edges = lambda i,direction: get_associated_edges(i, all_edges)['in'] if direction == "in" else get_associated_edges(i, all_edges)['out']
 
     # conservation of flow for t=1:
-    # sum(f_j_i_t=1_s) + sum(f_i_j_t=1_s) + g_i - w_i = 0 (total incoming - outgoing + generated - supplied = 0)
+    # sum(f_j_i_t=1_s) + sum(f_i_j_t=1_s) + g_i = d_i (total incoming - outgoing + generated - supplied = 0):
     flow_lhs = [[dvar_pos['f_i' + in_edge[0] + '_j' + in_edge[1] + '_t1' + '_s' + s] for in_edge in assoc_edges(i, 'in')] + \
                 [dvar_pos['f_i' + out_edge[0] + '_j' + out_edge[1] + '_t1' + '_s' + s] for out_edge in assoc_edges(i, 'out')] + \
-                [dvar_pos['g_i' + i + '_t1' + '_s' + s]] + \
-                [dvar_pos['w_i' + i + '_t1' + '_s' + s]] for i in all_nodes for s in all_scenarios]
+                [dvar_pos['g_i' + i + '_t1' + '_s' + s]] for i in all_nodes for s in all_scenarios]
+    flow_lhs_coef = [[1 for in_edge in assoc_edges(i, 'in')] + \
+                     [-1 for out_edge in assoc_edges(i, 'out')] + \
+                     [1] for i in all_nodes for s in all_scenarios]
+    flow_constraints = [[flow_lhs[constraint], flow_lhs_coef[constraint]] for constraint in range(len(flow_lhs))]
+    flow_rhs = [nodes[('d', i)] for i in all_nodes for s in all_scenarios]
+    robust_opt.linear_constraints.add(lin_expr = flow_constraints, senses = "E"*len(flow_constraints), rhs = flow_rhs)
+
+    # reactive power constraints for t=1, existing (non-failed) edges:
+    reactive_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t1' + '_s' + s],\
+                     dvar_pos['theta_i' + cur_edge[1] + '_t1' + '_s' + s], \
+                     dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1' + '_s' + s]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)]]
+    reactive_lhs_coef = [[1, -1, -edges[('x',) + cur_edge]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)]]
+    reactive_constraints = [[reactive_lhs[constraint], reactive_lhs_coef[constraint]] for constraint in range(len(reactive_lhs))]
+    robust_opt.linear_constraints.add(lin_expr = reactive_constraints, senses = "E"*len(reactive_constraints), rhs = [0]*len(reactive_constraints))
+
+    # reactive power constraints for t=1, upgradable (non-failed) edges:
+    reactive_new_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t1' + '_s' + s],\
+                     dvar_pos['theta_i' + cur_edge[1] + '_t1' + '_s' + s], \
+                     dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1' + '_s' + s], \
+                     dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)] and edges[('H', ) + cur_edge] > 0]
+    reactive_new_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H', ) + cur_edge] > 0]
+    reactive_new2_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], -bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H', ) + cur_edge] > 0]
+    reactive_new_constraints = [[reactive_new_lhs[constraint], reactive_new_lhs_coef[constraint]] for constraint in range(len(reactive_new_lhs))]
+    reactive_new2_constraints = [[reactive_new_lhs[constraint], reactive_new2_lhs_coef[constraint]] for constraint in range(len(reactive_new_lhs))]
+    robust_opt.linear_constraints.add(lin_expr = reactive_new_constraints, senses = "L"*len(reactive_new_constraints), rhs = [bigM]*len(reactive_new_constraints))
+    robust_opt.linear_constraints.add(lin_expr = reactive_new2_constraints, senses = "G"*len(reactive_new_constraints), rhs = [-bigM]*len(reactive_new2_constraints))
+
+    # cascade effects occurring at t=1:
+    cascade_lhs = [[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s],\
+                    dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]],\
+                    dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in all_edges for s in all_scenarios]
+    cascade_lhs_coef = [[1, -1, -bigM] for cur_edge in all_edges for s in all_scenarios]
+    cascade_lhs_coef2 = [[-1, -1, -bigM] for cur_edge in all_edges for s in all_scenarios] # flow direction to the other side
+    cascade_rhs = [edges[('c',) + cur_edge] for cur_edge in all_edges for s in all_scenarios]*2
+    cascade_constraints = [[cascade_lhs[i],cascade_lhs_coef[i]] for i in range(len(cascade_lhs))] + \
+                          [[cascade_lhs[i],cascade_lhs_coef2[i]] for i in range(len(cascade_lhs))]
+    robust_opt.linear_constraints.add(lin_expr = cascade_constraints, senses = "L"*len(cascade_rhs), rhs = cascade_rhs)
+
+    # transmission capacity - established edges:
+    trans_cap_lhs = [[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t' + str(t) + '_s' + s], dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if edges[('H', ) + cur_edge] > 0]*2
+    trans_cap_lhs_coef = [[1, -bigM] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if edges[('H', ) + cur_edge] > 0] + \
+                         [[1, bigM] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if edges[('H', ) + cur_edge] > 0]
+    trans_cap_constraints = [[trans_cap_lhs[i],trans_cap_lhs_coef[i]] for i in range(len(trans_cap_lhs_coef))]
+    robust_opt.linear_constraints.add(lin_expr = trans_cap_constraints, senses = "L"*(len(trans_cap_lhs)/2) + "G"*(len(trans_cap_lhs)/2), rhs = [0]*len(trans_cap_lhs))
+
+    # transmission capacity - disabled failed edges
+    trans_init_failed_lhs = [[[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]],[1]] for cur_edge in all_edges for s in all_scenarios if cur_edge in scenarios[('s',s)]]
+    robust_opt.linear_constraints.add(lin_expr = trans_init_failed_lhs, senses = "E"*len(trans_init_failed_lhs), rhs = [0]*len(trans_init_failed_lhs))
+
+
+    # transmission capacity - failed edges after first cascade:
+    trans_fail_lhs = [[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2' + '_s' + s], dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in all_edges for s in all_scenarios]*2
+    trans_fail_lhs_coef = [[1, bigM] for cur_edge in all_edges for s in all_scenarios] + \
+                          [[1, -bigM] for cur_edge in all_edges for s in all_scenarios]
+    trans_fail_constraints = [[trans_fail_lhs[i], trans_fail_lhs_coef[i]] for i in range(len(trans_fail_lhs))]
+    trans_fail_rhs = [bigM]*(len(trans_fail_lhs)/2) + [-bigM]*(len(trans_fail_lhs)/2)
+    trans_fail_sign = "L"*(len(trans_fail_lhs)/2) + "G"*(len(trans_fail_lhs)/2)
+    robust_opt.linear_constraints.add(lin_expr = trans_fail_constraints, senses = trans_fail_sign, rhs = trans_fail_rhs)
+
+    # limit supply (do not exceed demand at t=2) (*different from previous approach - not strict '-' here)
+    max_supply_lhs = [[dvar_pos['w_i' + cur_node + '_t2_s' + s] for cur_node in all_nodes] + [dvar_pos['g_i' + cur_node + '_t2_s' + s] for cur_node in all_nodes] for s in all_scenarios]
+    max_supply_lhs_coef = [[1]*len(all_nodes) + [-1]*len(all_nodes) for s in all_scenarios]
+    max_supply_constraints = [[max_supply_lhs[i], max_supply_lhs_coef[i]] for i in range(len(max_supply_lhs))]
+    robust_opt.linear_constraints.add(lin_expr = max_supply_constraints, senses = "L"*len(max_supply_constraints), rhs = [0]*len(max_supply_constraints))
+
+    # limit supply (demand = supply) at t=1
+    max_supply1_lhs = [[dvar_pos['w_i' + cur_node + '_t1_s' + s] for cur_node in all_nodes] + [dvar_pos['g_i' + cur_node + '_t1_s' + s] for cur_node in all_nodes] for s in all_scenarios]
+    max_supply1_lhs_coef = [[1]*len(all_nodes) + [-1]*len(all_nodes) for s in all_scenarios]
+    max_supply1_constraints = [[max_supply1_lhs[i], max_supply1_lhs_coef[i]] for i in range(len(max_supply1_lhs))]
+    robust_opt.linear_constraints.add(lin_expr = max_supply1_constraints, senses = "E"*len(max_supply1_constraints), rhs = [0]*len(max_supply1_constraints))
+
+    # limit demand at each node - not required since this is already defined as an upper bound to w_i_t_s.
+
+    # generation capacity t=1,2:
+    gen_cap_constraints = [[[dvar_pos['g_i' + cur_node + '_t' + str(t) + '_s' + s], dvar_pos['c_i' + cur_node]],[1, -1]] for cur_node in all_nodes for t in [1,2] for s in all_scenarios]
+    gen_cap_rhs = [nodes[('c', cur_node)] for cur_node in all_nodes for t in [1,2] for s in all_scenarios]
+    robust_opt.linear_constraints.add(lin_expr = gen_cap_constraints, senses = "L"*len(gen_cap_constraints), rhs = gen_cap_rhs)
+
+    # establish generator
+    gen_est_constraints = [[[dvar_pos['c_i' + cur_node], dvar_pos['Z_i' + cur_node]], [1, -bigM]] for cur_node in all_nodes]
+    robust_opt.linear_constraints.add(lin_expr = gen_est_constraints, senses = "L"*len(gen_est_constraints), rhs = [0]*len(gen_est_constraints))
+
+    # conservation of flow for t=2:
+    flow_lhs = [[dvar_pos['f_i' + in_edge[0] + '_j' + in_edge[1] + '_t2' + '_s' + s] for in_edge in assoc_edges(i, 'in')] + \
+                [dvar_pos['f_i' + out_edge[0] + '_j' + out_edge[1] + '_t2' + '_s' + s] for out_edge in assoc_edges(i, 'out')] + \
+                [dvar_pos['g_i' + i + '_t2' + '_s' + s]] + \
+                [dvar_pos['w_i' + i + '_t2' + '_s' + s]] for i in all_nodes for s in all_scenarios]
     flow_lhs_coef = [[1 for in_edge in assoc_edges(i, 'in')] + \
                      [-1 for out_edge in assoc_edges(i, 'out')] + \
                      [1, -1] for i in all_nodes for s in all_scenarios]
     flow_constraints = [[flow_lhs[constraint], flow_lhs_coef[constraint]] for constraint in range(len(flow_lhs))]
     robust_opt.linear_constraints.add(lin_expr = flow_constraints, senses = "E"*len(flow_constraints), rhs = [0]*len(flow_constraints))
-    sys.exit() # STOPPED HERE
-    # reactive power constraints for t=1, existing non-failed edges:
 
-    # reactive power constraints for t=1, upgradable edges:
+    # reactive power constraints for t=2, upgradable edges
+    reactive_new_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t2_s' + s],\
+                         dvar_pos['theta_i' + cur_edge[1] + '_t2_s' + s], \
+                         dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], \
+                         dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s], \
+                         dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)] and edges[('H',) + cur_edge] > 0]
+    reactive_new_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], -bigM, bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H',) + cur_edge] > 0]
+    reactive_new2_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], bigM, -bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H',) + cur_edge] > 0]
+    reactive_new_constraints = [[reactive_new_lhs[constraint], reactive_new_lhs_coef[constraint]] for constraint in range(len(reactive_new_lhs))]
+    reactive_new2_constraints = [[reactive_new_lhs[constraint], reactive_new2_lhs_coef[constraint]] for constraint in range(len(reactive_new_lhs))]
+    robust_opt.linear_constraints.add(lin_expr = reactive_new_constraints, senses = "L"*len(reactive_new_constraints), rhs = [bigM]*len(reactive_new_constraints))
+    robust_opt.linear_constraints.add(lin_expr = reactive_new2_constraints, senses = "G"*len(reactive_new_constraints), rhs = [-bigM]*len(reactive_new2_constraints))
 
-    # cascade effects occurring at t=1:
+    # reactive power constraints for t=2, existing edges (X_i omitted)
+    reactive_new_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t2_s' + s],\
+                         dvar_pos['theta_i' + cur_edge[1] + '_t2_s' + s], \
+                         dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], \
+                         dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)] and edges[('H',) + cur_edge] == 0]
+    reactive_new_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], -bigM, bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H',) + cur_edge] == 0]
+    reactive_new2_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], bigM, -bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H',) + cur_edge] == 0]
+    reactive_new_constraints = [[reactive_new_lhs[constraint], reactive_new_lhs_coef[constraint]] for constraint in range(len(reactive_new_lhs))]
+    reactive_new2_constraints = [[reactive_new_lhs[constraint], reactive_new2_lhs_coef[constraint]] for constraint in range(len(reactive_new_lhs))]
+    robust_opt.linear_constraints.add(lin_expr = reactive_new_constraints, senses = "L"*len(reactive_new_constraints), rhs = [bigM]*len(reactive_new_constraints))
+    robust_opt.linear_constraints.add(lin_expr = reactive_new2_constraints, senses = "G"*len(reactive_new_constraints), rhs = [-bigM]*len(reactive_new2_constraints))
 
-    # transmission capacity - established edges:
 
-    # transmission capacity - failed edges after first cascade:
-
-    # limit supply (do not exceed demand at t=2) (*different from previous approach - not strict '-' here):
-
-    # generation capacity t=1:
-
-    # conservation of flow for t=2:
-
-    # generation capacity t=2:
-
-    # reactive power constraints for t=2, existing non-failed edges
-
-    # transmission capacity - within capacity after 1st cascade, i.e., t=2 (*different from previous approach*):
-
-    # reactive power constraints for t=2, upgradable edges:
+    # transmission capacity - within capacity after 1st cascade, i.e., t=2 (*different from previous approach*)
+    capacity_round2_lhs = [[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for s in all_scenarios]*2
+    capacity_round2_lhs_coef = [[1, -1] for cur_edge in all_edges for s in all_scenarios] + \
+                               [[1, 1] for cur_edge in all_edges for s in all_scenarios]
+    capacity_round2_rhs = [edges[('c',) + cur_edge] for cur_edge in all_edges for s in all_scenarios] + \
+                          [-edges[('c',) + cur_edge] for cur_edge in all_edges for s in all_scenarios]
+    capacity_round2_constraint = [[capacity_round2_lhs[i], capacity_round2_lhs_coef[i]] for i in range(len(capacity_round2_lhs))]
+    robust_opt.linear_constraints.add(lin_expr = capacity_round2_constraint, senses = "L"*(len(capacity_round2_lhs)/2)+"G"*(len(capacity_round2_lhs)/2), rhs = capacity_round2_rhs)
 
     # investment cost constraint
-
-
+    budget_lhs = [[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]] for cur_edge in all_edges] + \
+                  [dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]] for cur_edge in all_edges if edges[('H',) + cur_edge] > 0] + \
+                  [dvar_pos['c_i' + cur_node] for cur_node in all_nodes] + \
+                  [dvar_pos['Z_i' + cur_node] for cur_node in all_nodes]]
+    budget_lhs_coef = [[edges[('h',) + cur_edge] for cur_edge in all_edges] + \
+                       [edges[('H',) + cur_edge] for cur_edge in all_edges if edges[('H',) + cur_edge] > 0] + \
+                       [nodes[('h', cur_node)] for cur_node in all_nodes] + \
+                       [nodes[('H', cur_node)] for cur_node in all_nodes]]
+    # FIX BUG HERE
+    robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [args.budget])
+    sys.exit()
     return robust_opt
-
-
 
 
 
