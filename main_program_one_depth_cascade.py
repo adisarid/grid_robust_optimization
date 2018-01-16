@@ -36,6 +36,8 @@ parser.add_argument('--opt_gap', help = "Optimality gap for CPLEX run", type = f
 parser.add_argument('--budget', help = "Budget constraint for optimization problem", type = float, default = 100.0)
 parser.add_argument('--print_lp', help = "Export c:/temp/grid_cascade_output/tmp_robust_1_cascade.lp", action = "store_true")
 parser.add_argument('--print_debug_function_tracking', help = "Print a message upon entering each function", action = "store_true")
+parser.add_argument('--export_results_file', help = "Save the solution file with variable names", action = "store_true")
+
 # ... add additional arguments as required here ..
 args = parser.parse_args()
 
@@ -70,7 +72,7 @@ def main_program():
     if args.print_lp:
         robust_opt_cplex.write("c:/temp/grid_cascade_output/tmp_robust_1_cascade.lp")
 
-    time_spent_total = clock() # initialize solving time
+    time_spent_total = time.clock() # initialize solving time
     robust_opt_cplex.parameters.mip.tolerances.mipgap.set(args.opt_gap) # set target optimality gap
     robust_opt_cplex.parameters.timelimit.set(args.time_limit) # set run time limit
 
@@ -78,38 +80,39 @@ def main_program():
     robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
 
     robust_opt_cplex.solve()  #solve the model
-##
-##    print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
-##    # the following line prints the corresponding status string
-##    print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
-##    if robust_opt_cplex.solution.get_status != 103:
-##        print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
-##        print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
-##
-##        # export the obtained solution to a file
-##        # compute total supply per scenario
-##        current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value(), robust_opt_cplex.solution.MIP.get_mip_relative_gap()]
-##        current_var_names = robust_opt_cplex.variables.get_names() + ['Objective', 'Opt. Gap.']
-##
-##        tot_supply = [sum([current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-##        tot_unsupplied = [scenarios[cur_scenario]*sum([nodes[('d', wkey[1])]-current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-##        tot_supply_sce = ['supply_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-##        tot_supply_missed = ['un_supplied_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-##
-##        # add some info to results
-##        current_solution = current_solution + tot_supply + tot_unsupplied
-##        current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
-##
-##        print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
-##        print "Supply per scenario:", {tot_supply_sce[i]: tot_supply[i] for i in xrange(len(tot_supply))}
-##        print "Supply missed per scenario:", {tot_supply_missed[i]: tot_unsupplied[i] for i in xrange(len(tot_supply_sce))}
-##
-##        # write results to a file
-##        timestamp = time.strftime('%d-%m-%Y %H-%M-%S-', time.gmtime()) + str(round(time.clock(), 3)) + ' - '
-##        write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
-##
-##        # Finish
-##        print "*** Program completed. ***"
+
+    print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
+    # the following line prints the corresponding status string
+    print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
+    if robust_opt_cplex.solution.get_status != 103:
+        print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
+        print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
+
+        # export the obtained solution to a file
+        # compute total supply per scenario
+        current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value(), robust_opt_cplex.solution.MIP.get_mip_relative_gap()]
+        current_var_names = robust_opt_cplex.variables.get_names() + ['Objective', 'Opt. Gap.']
+
+        tot_supply = [sum([current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+        tot_unsupplied = [scenarios[cur_scenario]*sum([nodes[('d', wkey[1])]-current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+        tot_supply_sce = ['supply_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+        tot_supply_missed = ['un_supplied_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
+
+        # add some info to results
+        current_solution = current_solution + tot_supply + tot_unsupplied
+        current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
+
+        print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
+        print "Supply per scenario:", {tot_supply_sce[i]: tot_supply[i] for i in xrange(len(tot_supply))}
+        print "Supply missed per scenario:", {tot_supply_missed[i]: tot_unsupplied[i] for i in xrange(len(tot_supply_sce))}
+
+        # write results to a file
+        if args.export_results_file:
+            timestamp = time.strftime('%d-%m-%Y %H-%M-%S-', time.gmtime()) + str(round(time.clock(), 3)) + ' - '
+            write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
+
+        # Finish
+        print "*** Program completed. ***"
 
 
 
@@ -491,17 +494,16 @@ def create_cplex_object():
     robust_opt.linear_constraints.add(lin_expr = capacity_round2_constraint, senses = "L"*(len(capacity_round2_lhs)/2)+"G"*(len(capacity_round2_lhs)/2), rhs = capacity_round2_rhs)
 
     # investment cost constraint
-    budget_lhs = [[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]] for cur_edge in all_edges] + \
+    budget_lhs = [dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]] for cur_edge in all_edges] + \
                   [dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]] for cur_edge in all_edges if edges[('H',) + cur_edge] > 0] + \
                   [dvar_pos['c_i' + cur_node] for cur_node in all_nodes] + \
-                  [dvar_pos['Z_i' + cur_node] for cur_node in all_nodes]]
-    budget_lhs_coef = [[edges[('h',) + cur_edge] for cur_edge in all_edges] + \
+                  [dvar_pos['Z_i' + cur_node] for cur_node in all_nodes]
+    budget_lhs_coef = [edges[('h',) + cur_edge] for cur_edge in all_edges] + \
                        [edges[('H',) + cur_edge] for cur_edge in all_edges if edges[('H',) + cur_edge] > 0] + \
                        [nodes[('h', cur_node)] for cur_node in all_nodes] + \
-                       [nodes[('H', cur_node)] for cur_node in all_nodes]]
-    # FIX BUG HERE
+                       [nodes[('H', cur_node)] for cur_node in all_nodes]
     robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [args.budget])
-    sys.exit()
+
     return robust_opt
 
 
