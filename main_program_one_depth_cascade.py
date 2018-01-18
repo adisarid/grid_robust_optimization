@@ -411,7 +411,7 @@ def create_cplex_object():
     robust_opt.linear_constraints.add(lin_expr = trans_cap_constraints, senses = "L"*(len(trans_cap_lhs)/2) + "G"*(len(trans_cap_lhs)/2), rhs = [0]*len(trans_cap_lhs))
 
     # transmission capacity - disabled failed edges
-    trans_init_failed_lhs = [[[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]],[1]] for cur_edge in all_edges for s in all_scenarios if cur_edge in scenarios[('s',s)]]
+    trans_init_failed_lhs = [[[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t' + str(t) + '_s' + s]],[1]] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if cur_edge in scenarios[('s',s)]]
     robust_opt.linear_constraints.add(lin_expr = trans_init_failed_lhs, senses = "E"*len(trans_init_failed_lhs), rhs = [0]*len(trans_init_failed_lhs))
 
 
