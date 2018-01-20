@@ -305,11 +305,11 @@ def build_cplex_problem():
     dvar_type += ['C' for egge in all_edges for t in [1,2] for s in all_scenarios]
 
     # define failed edges (only at initial failure and at the first cascade)
-    dvar_name += ['F_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t' + str(t) + '_s' + str(s) for edge in all_edges for s in all_scenarios for t in [0,1]]
-    dvar_obj_coef += [0 for edge in all_edges for s in all_scenarios for t in [0,1]]
-    dvar_lb += [0 for edge in all_edges for s in all_scenarios for t in [0,1]]
-    dvar_ub += [1 for edge in all_edges for s in all_scenarios for t in [0,1]]
-    dvar_type += ['B' for edge in all_edges for s in all_scenarios for t in [0,1]]
+    dvar_name += ['F_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t1' + '_s' + str(s) for edge in all_edges for s in all_scenarios]
+    dvar_obj_coef += [0 for edge in all_edges for s in all_scenarios]
+    dvar_lb += [0 for edge in all_edges for s in all_scenarios]
+    dvar_ub += [1 for edge in all_edges for s in all_scenarios]
+    dvar_type += ['B' for edge in all_edges for s in all_scenarios]
 
     # define capacity upgrade variables
     dvar_name += ['c_i' + edge[0] + '_j' + edge[1] for edge in all_edges]
