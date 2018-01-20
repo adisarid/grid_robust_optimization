@@ -86,33 +86,28 @@ def main_program():
     print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
     if robust_opt_cplex.solution.get_status != 103:
         print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
-        print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
+        #print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
 
         # export the obtained solution to a file
         # compute total supply per scenario
         current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value(), robust_opt_cplex.solution.MIP.get_mip_relative_gap()]
         current_var_names = robust_opt_cplex.variables.get_names() + ['Objective', 'Opt. Gap.']
 
-        tot_supply = [sum([current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-        tot_unsupplied = [scenarios[cur_scenario]*sum([nodes[('d', wkey[1])]-current_solution[dvar_pos[wkey]] for wkey in dvar_pos.keys() if wkey[0] == 'w' if wkey[2] == cur_scenario[1]]) for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-        tot_supply_sce = ['supply_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-        tot_supply_missed = ['un_supplied_s' + cur_scenario[1] for cur_scenario in scenarios.keys() if cur_scenario[0] == 's_pr']
-
-        # add some info to results
-        current_solution = current_solution + tot_supply + tot_unsupplied
-        current_var_names = current_var_names + tot_supply_sce + tot_supply_missed
-
-        print "Current (real) objective value:", sum(tot_unsupplied), 'MW unsupplied'
-        print "Supply per scenario:", {tot_supply_sce[i]: tot_supply[i] for i in xrange(len(tot_supply))}
-        print "Supply missed per scenario:", {tot_supply_missed[i]: tot_unsupplied[i] for i in xrange(len(tot_supply_sce))}
-
         # write results to a file
         if args.export_results_file:
             timestamp = time.strftime('%d-%m-%Y %H-%M-%S-', time.gmtime()) + str(round(time.clock(), 3)) + ' - '
             write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
 
+        # print some interesting statistics per scenario
+        tot_supply_sce = {cur_scenario: sum([current_solution[dvar_pos['w_i' + cur_node + '_t2_s' + cur_scenario]] for cur_node in all_nodes]) for cur_scenario in all_scenarios}
+        tot_missed_sce = {cur_scenario: sum([nodes[('d', cur_node)] - current_solution[dvar_pos['w_i' + cur_node + '_t2_s' + cur_scenario]] for cur_node in all_nodes]) for cur_scenario in all_scenarios}
+
+        print "Supply per scenario:", tot_supply_sce
+        print "Supply missed per scenario:", tot_missed_sce
+
+
         # Finish
-        print "*** Program completed. ***"
+        print "*** Program completed ***"
 
 
 
@@ -303,7 +298,7 @@ def build_cplex_problem():
     all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
 
     # define flow variables
-    dvar_name += ['f_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t' + str(t) + '_s' + str(s) for edge in all_edges for t in [1,2] for s in all_scenarios]
+    dvar_name += ['flow_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t' + str(t) + '_s' + str(s) for edge in all_edges for t in [1,2] for s in all_scenarios]
     dvar_obj_coef += [0 for edge in all_edges for t in [1,2] for s in all_scenarios]
     dvar_lb += [-tot_demand for edge in all_edges for t in [1,2] for s in all_scenarios]
     dvar_ub += [tot_demand for edge in all_edges for t in [1,2] for s in all_scenarios]
@@ -362,8 +357,8 @@ def create_cplex_object():
 
     # conservation of flow for t=1:
     # sum(f_j_i_t=1_s) + sum(f_i_j_t=1_s) + g_i = d_i (total incoming - outgoing + generated - supplied = 0):
-    flow_lhs = [[dvar_pos['f_i' + in_edge[0] + '_j' + in_edge[1] + '_t1' + '_s' + s] for in_edge in assoc_edges(i, 'in')] + \
-                [dvar_pos['f_i' + out_edge[0] + '_j' + out_edge[1] + '_t1' + '_s' + s] for out_edge in assoc_edges(i, 'out')] + \
+    flow_lhs = [[dvar_pos['flow_i' + in_edge[0] + '_j' + in_edge[1] + '_t1' + '_s' + s] for in_edge in assoc_edges(i, 'in')] + \
+                [dvar_pos['flow_i' + out_edge[0] + '_j' + out_edge[1] + '_t1' + '_s' + s] for out_edge in assoc_edges(i, 'out')] + \
                 [dvar_pos['g_i' + i + '_t1' + '_s' + s]] for i in all_nodes for s in all_scenarios]
     flow_lhs_coef = [[1 for in_edge in assoc_edges(i, 'in')] + \
                      [-1 for out_edge in assoc_edges(i, 'out')] + \
@@ -375,7 +370,7 @@ def create_cplex_object():
     # reactive power constraints for t=1, existing (non-failed) edges:
     reactive_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t1' + '_s' + s],\
                      dvar_pos['theta_i' + cur_edge[1] + '_t1' + '_s' + s], \
-                     dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1' + '_s' + s]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)]]
+                     dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1' + '_s' + s]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)]]
     reactive_lhs_coef = [[1, -1, -edges[('x',) + cur_edge]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)]]
     reactive_constraints = [[reactive_lhs[constraint], reactive_lhs_coef[constraint]] for constraint in range(len(reactive_lhs))]
     robust_opt.linear_constraints.add(lin_expr = reactive_constraints, senses = "E"*len(reactive_constraints), rhs = [0]*len(reactive_constraints))
@@ -383,7 +378,7 @@ def create_cplex_object():
     # reactive power constraints for t=1, upgradable (non-failed) edges:
     reactive_new_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t1' + '_s' + s],\
                      dvar_pos['theta_i' + cur_edge[1] + '_t1' + '_s' + s], \
-                     dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1' + '_s' + s], \
+                     dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1' + '_s' + s], \
                      dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)] and edges[('H', ) + cur_edge] > 0]
     reactive_new_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H', ) + cur_edge] > 0]
     reactive_new2_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], -bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H', ) + cur_edge] > 0]
@@ -393,7 +388,7 @@ def create_cplex_object():
     robust_opt.linear_constraints.add(lin_expr = reactive_new2_constraints, senses = "G"*len(reactive_new_constraints), rhs = [-bigM]*len(reactive_new2_constraints))
 
     # cascade effects occurring at t=1:
-    cascade_lhs = [[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s],\
+    cascade_lhs = [[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s],\
                     dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]],\
                     dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in all_edges for s in all_scenarios]
     cascade_lhs_coef = [[1, -1, -bigM] for cur_edge in all_edges for s in all_scenarios]
@@ -404,19 +399,19 @@ def create_cplex_object():
     robust_opt.linear_constraints.add(lin_expr = cascade_constraints, senses = "L"*len(cascade_rhs), rhs = cascade_rhs)
 
     # transmission capacity - established edges:
-    trans_cap_lhs = [[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t' + str(t) + '_s' + s], dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if edges[('H', ) + cur_edge] > 0]*2
+    trans_cap_lhs = [[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t' + str(t) + '_s' + s], dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if edges[('H', ) + cur_edge] > 0]*2
     trans_cap_lhs_coef = [[1, -bigM] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if edges[('H', ) + cur_edge] > 0] + \
                          [[1, bigM] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if edges[('H', ) + cur_edge] > 0]
     trans_cap_constraints = [[trans_cap_lhs[i],trans_cap_lhs_coef[i]] for i in range(len(trans_cap_lhs_coef))]
     robust_opt.linear_constraints.add(lin_expr = trans_cap_constraints, senses = "L"*(len(trans_cap_lhs)/2) + "G"*(len(trans_cap_lhs)/2), rhs = [0]*len(trans_cap_lhs))
 
     # transmission capacity - disabled failed edges
-    trans_init_failed_lhs = [[[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t' + str(t) + '_s' + s]],[1]] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if cur_edge in scenarios[('s',s)]]
+    trans_init_failed_lhs = [[[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t' + str(t) + '_s' + s]],[1]] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if cur_edge in scenarios[('s',s)]]
     robust_opt.linear_constraints.add(lin_expr = trans_init_failed_lhs, senses = "E"*len(trans_init_failed_lhs), rhs = [0]*len(trans_init_failed_lhs))
 
 
     # transmission capacity - failed edges after first cascade:
-    trans_fail_lhs = [[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2' + '_s' + s], dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in all_edges for s in all_scenarios]*2
+    trans_fail_lhs = [[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2' + '_s' + s], dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in all_edges for s in all_scenarios]*2
     trans_fail_lhs_coef = [[1, bigM] for cur_edge in all_edges for s in all_scenarios] + \
                           [[1, -bigM] for cur_edge in all_edges for s in all_scenarios]
     trans_fail_constraints = [[trans_fail_lhs[i], trans_fail_lhs_coef[i]] for i in range(len(trans_fail_lhs))]
@@ -448,8 +443,8 @@ def create_cplex_object():
     robust_opt.linear_constraints.add(lin_expr = gen_est_constraints, senses = "L"*len(gen_est_constraints), rhs = [0]*len(gen_est_constraints))
 
     # conservation of flow for t=2:
-    flow_lhs = [[dvar_pos['f_i' + in_edge[0] + '_j' + in_edge[1] + '_t2' + '_s' + s] for in_edge in assoc_edges(i, 'in')] + \
-                [dvar_pos['f_i' + out_edge[0] + '_j' + out_edge[1] + '_t2' + '_s' + s] for out_edge in assoc_edges(i, 'out')] + \
+    flow_lhs = [[dvar_pos['flow_i' + in_edge[0] + '_j' + in_edge[1] + '_t2' + '_s' + s] for in_edge in assoc_edges(i, 'in')] + \
+                [dvar_pos['flow_i' + out_edge[0] + '_j' + out_edge[1] + '_t2' + '_s' + s] for out_edge in assoc_edges(i, 'out')] + \
                 [dvar_pos['g_i' + i + '_t2' + '_s' + s]] + \
                 [dvar_pos['w_i' + i + '_t2' + '_s' + s]] for i in all_nodes for s in all_scenarios]
     flow_lhs_coef = [[1 for in_edge in assoc_edges(i, 'in')] + \
@@ -461,7 +456,7 @@ def create_cplex_object():
     # reactive power constraints for t=2, upgradable edges
     reactive_new_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t2_s' + s],\
                          dvar_pos['theta_i' + cur_edge[1] + '_t2_s' + s], \
-                         dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], \
+                         dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], \
                          dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s], \
                          dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)] and edges[('H',) + cur_edge] > 0]
     reactive_new_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], -bigM, bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H',) + cur_edge] > 0]
@@ -474,7 +469,7 @@ def create_cplex_object():
     # reactive power constraints for t=2, existing edges (X_i omitted)
     reactive_new_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t2_s' + s],\
                          dvar_pos['theta_i' + cur_edge[1] + '_t2_s' + s], \
-                         dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], \
+                         dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], \
                          dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)] and edges[('H',) + cur_edge] == 0]
     reactive_new_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], -bigM, bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H',) + cur_edge] == 0]
     reactive_new2_lhs_coef = [[1, -1, -edges[('x',) + cur_edge], bigM, -bigM] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H',) + cur_edge] == 0]
@@ -485,7 +480,7 @@ def create_cplex_object():
 
 
     # transmission capacity - within capacity after 1st cascade, i.e., t=2 (*different from previous approach*)
-    capacity_round2_lhs = [[dvar_pos['f_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for s in all_scenarios]*2
+    capacity_round2_lhs = [[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for s in all_scenarios]*2
     capacity_round2_lhs_coef = [[1, -1] for cur_edge in all_edges for s in all_scenarios] + \
                                [[1, 1] for cur_edge in all_edges for s in all_scenarios]
     capacity_round2_rhs = [edges[('c',) + cur_edge] for cur_edge in all_edges for s in all_scenarios] + \
@@ -670,7 +665,7 @@ def write_sim_steps(filename, failed_edges, flow_per_stage):
     '''
     Given file name, variable names and values, write the solution to a csv file
     '''
-    flow_write = [['f'] + [j[0], j[1], i, j[2]] for i in flow_per_stage.keys() for j in flow_per_stage[i]]
+    flow_write = [['flow'] + [j[0], j[1], i, j[2]] for i in flow_per_stage.keys() for j in flow_per_stage[i]]
     overflow_fails = [['O'] + list(j) + [i, 1] for i in failed_edges.keys() for j in failed_edges[i]]
     name_val = flow_write + overflow_fails
     with open(filename, 'wb') as csvfile:
@@ -814,8 +809,8 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     types = 'C'*len(G.edges())
     lb = [-1e20]*len(G.edges())
     ub = [1e20]*len(G.edges())
-    names = ['f' + str(curr_edge) for curr_edge in sorted_edges(G.edges())]
-    dvar_pos_flow.update({('f', tuple(sorted(G.edges()[i]))):i+counter for i in range(len(G.edges()))})
+    names = ['flow' + str(curr_edge) for curr_edge in sorted_edges(G.edges())]
+    dvar_pos_flow.update({('flow', tuple(sorted(G.edges()[i]))):i+counter for i in range(len(G.edges()))})
     find_flow.variables.add(obj = obj, types = types, lb = lb, ub = ub, names = names)
     counter += len(dvar_pos_flow)
 
@@ -826,11 +821,11 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     find_flow.variables.add(obj = [0]*num_nodes, types = 'C'*num_nodes, lb = [-1e20]*num_nodes, ub = [1e20]*num_nodes, names = names)
 
     # Add phase angle (theta) flow constraints: theta_i-theta_j-x_{ij}f_{ij} = 0
-    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('f', curr_edge)]], [1.0, -1.0, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]] for curr_edge in sorted_edges(G.edges())]
+    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('flow', curr_edge)]], [1.0, -1.0, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]] for curr_edge in sorted_edges(G.edges())]
     find_flow.linear_constraints.add(lin_expr = phase_constraints, senses = "E"*len(phase_constraints), rhs = [0]*len(phase_constraints))
 
     # Add general flow constraints. formation is: incoming edges - outgoing edges + generation
-    flow_conservation = [[[dvar_pos_flow[('f', edge)] for edge in get_associated_edges(node, G.edges())['in']] + [dvar_pos_flow[('f', edge)] for edge in get_associated_edges(node, G.edges())['out']], \
+    flow_conservation = [[[dvar_pos_flow[('flow', edge)] for edge in get_associated_edges(node, G.edges())['in']] + [dvar_pos_flow[('flow', edge)] for edge in get_associated_edges(node, G.edges())['out']], \
                           [1 for edge in get_associated_edges(node, G.edges())['in']] + [-1 for edge in get_associated_edges(node, G.edges())['out']]] for node in G.nodes()]
     flow_conservation_rhs = [G.node[curr_node]['demand']-G.node[curr_node]['generated'] for curr_node in G.nodes()]
     # clean up a bit for "empty" constraints
@@ -872,7 +867,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     find_flow_vars = find_flow.solution.get_values()
 
     # Set the failed edges
-    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if abs(find_flow_vars[dvar_pos_flow[('f', edge)]]) > G.edge[edge[0]][edge[1]]['capacity']]
+    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if abs(find_flow_vars[dvar_pos_flow[('flow', edge)]]) > G.edge[edge[0]][edge[1]]['capacity']]
 
     # just in case you want an lp file - for debugging purposes.
 
