@@ -37,6 +37,7 @@ parser.add_argument('--budget', help = "Budget constraint for optimization probl
 parser.add_argument('--print_lp', help = "Export c:/temp/grid_cascade_output/tmp_robust_1_cascade.lp", action = "store_true")
 parser.add_argument('--print_debug_function_tracking', help = "Print a message upon entering each function", action = "store_true")
 parser.add_argument('--export_results_file', help = "Save the solution file with variable names", action = "store_true")
+parser.add_argument('--disable_cplex_messages', help = "Disables CPLEX's log, warning, error and results message streams", action = "store_true")
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -74,10 +75,18 @@ def main_program():
 
     time_spent_total = time.clock() # initialize solving time
     robust_opt_cplex.parameters.mip.tolerances.mipgap.set(args.opt_gap) # set target optimality gap
-    robust_opt_cplex.parameters.timelimit.set(args.time_limit) # set run time limit
+    robust_opt_cplex.parameters.timelimit.set(args.time_limit*60*60) # set run time limit
 
     # enable multithread search
     robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
+
+    # set error stream
+    if args.disable_cplex_messages:
+        robust_opt_cplex.set_log_stream(None)
+        robust_opt_cplex.set_error_stream(None)
+        robust_opt_cplex.set_warning_stream(None)
+        robust_opt_cplex.set_results_stream(None)
+
 
     robust_opt_cplex.solve()  #solve the model
 
