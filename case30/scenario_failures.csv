@@ -1,4 +1,4 @@
-﻿.,node1,node2,capacity
+﻿scenario,node1,node2,capacity
 1,1,3,100
 1,4,12,100
 1,10,20,100
