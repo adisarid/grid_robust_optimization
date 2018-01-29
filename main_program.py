@@ -253,20 +253,6 @@ def read_additional_param(filename):
             dic[(row[0])] = float(row[1])
     return dic
 
-def build_nx_grid(nodes, edges):
-    G = nx.Graph() # initialize graph using networkx library
-    for node in [i[1] for i in nodes.keys() if i[0] == 'd']:
-        G.add_node(node,
-                   demand = max(0, nodes[('d', node)]),
-                   original_demand = max(0, nodes[('d', node)]),
-                   gen_cap = nodes[('c', node)],
-                   generated = min(0, nodes[('d', node)]),
-                   un_sup_cost = 0)
-    for edge in [(i[1],i[2]) for i in edges.keys() if i[0] == 'c' and edges[i]>0]:
-        G.add_edge(edge[0], edge[1], capacity = edges[('c',) + edge],
-                   susceptance = edges[('x',) + edge])
-    return G
-
 
 def arrange_edge_minmax(edge_i, edge_j = []):
     if edge_j == []:
