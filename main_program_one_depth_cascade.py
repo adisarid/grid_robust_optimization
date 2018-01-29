@@ -38,6 +38,8 @@ parser.add_argument('--print_lp', help = "Export c:/temp/grid_cascade_output/tmp
 parser.add_argument('--print_debug_function_tracking', help = "Print a message upon entering each function", action = "store_true")
 parser.add_argument('--export_results_file', help = "Save the solution file with variable names", action = "store_true")
 parser.add_argument('--disable_cplex_messages', help = "Disables CPLEX's log, warning, error and results message streams", action = "store_true")
+parser.add_argument('--penalize_failures', help = "Attach penalization coefficient to first order cascade failures (specify value)", type = float, default = 0.0)
+parser.add_argument('--use_benders', help = "Use Bender's decomposition - default approach", action = "store_true")
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -61,6 +63,8 @@ def main_program():
     global edges
     global scenarios
     global params
+    global current_solution
+
     nodes = read_nodes(instance_location + 'grid_nodes.csv')
     edges = read_edges(instance_location + 'grid_edges.csv')
     scenarios = read_scenarios(instance_location + 'scenario_failures.csv', instance_location + 'scenario_probabilities.csv')
@@ -87,6 +91,18 @@ def main_program():
         robust_opt_cplex.set_warning_stream(None)
         robust_opt_cplex.set_results_stream(None)
 
+    # set Bender's decomposition, code adopted from benders.py example of cplex
+    if args.use_benders:
+        anno = robust_opt_cplex.long_annotations
+        idx = anno.add(name=anno.benders_annotation, defval=anno.benders_mastervalue)
+        ctypes = robust_opt_cplex.variables.get_types()
+        objtype = anno.object_type.variable
+        continuous = robust_opt_cplex.variables.type.continuous
+        robust_opt_cplex.long_annotations.set_values(idx, objtype,
+                                        [(i, anno.benders_mastervalue+1)
+                                        for i, j
+                                        in enumerate(ctypes)
+                                        if j == continuous])
 
     robust_opt_cplex.solve()  #solve the model
 
@@ -110,13 +126,25 @@ def main_program():
         # print some interesting statistics per scenario
         tot_supply_sce = {cur_scenario: sum([current_solution[dvar_pos['w_i' + cur_node + '_t2_s' + cur_scenario]] for cur_node in all_nodes]) for cur_scenario in all_scenarios}
         tot_missed_sce = {cur_scenario: sum([nodes[('d', cur_node)] - current_solution[dvar_pos['w_i' + cur_node + '_t2_s' + cur_scenario]] for cur_node in all_nodes]) for cur_scenario in all_scenarios}
-
+        print "\n\nSupply and loss of load, according to optimization problem:"
+        print     "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
         print "Supply per scenario:", tot_supply_sce
         print "Supply missed per scenario:", tot_missed_sce
 
+        # for comparison, compute the "real" loss of load using the cascade simulation and the infrastructure
+        init_grid = build_nx_grid(nodes, edges, current_solution, dvar_pos)
+        cfe_dict_results = {cur_scenario: cfe(init_grid.copy(), scenarios[('s', cur_scenario)], write_solution_file = False, simulation_complete_run = True, fails_per_scenario = []) for cur_scenario in all_scenarios}
+
+        print "\n\nComparison to cascade simulation:"
+        print     "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+        tot_supply_sce_cascade = {cur_scenario: sum([cfe_dict_results[cur_scenario]['updated_grid_copy'].node[cur_node]['demand'] for cur_node in all_nodes]) for cur_scenario in all_scenarios}
+        tot_missed_sce_cascade = {cur_scenario: sum([nodes[('d', cur_node)] - cfe_dict_results[cur_scenario]['updated_grid_copy'].node[cur_node]['demand'] for cur_node in all_nodes]) for cur_scenario in all_scenarios}
+        print "Supply per scenario (simulation):", tot_supply_sce_cascade
+        print "Supply missed per scenario (simulation):", tot_missed_sce_cascade
 
         # Finish
         print "*** Program completed ***"
+        return({'cfe_dict_results': cfe_dict_results, 'current_solution': current_solution})
 
 
 
@@ -179,20 +207,6 @@ def read_additional_param(filename):
         for row in csv_reader:
             dic[(row[0])] = float(row[1])
     return dic
-
-def build_nx_grid(nodes, edges):
-    G = nx.Graph() # initialize graph using networkx library
-    for node in [i[1] for i in nodes.keys() if i[0] == 'd']:
-        G.add_node(node,
-                   demand = max(0, nodes[('d', node)]),
-                   original_demand = max(0, nodes[('d', node)]),
-                   gen_cap = nodes[('c', node)],
-                   generated = min(0, nodes[('d', node)]),
-                   un_sup_cost = 0)
-    for edge in [(i[1],i[2]) for i in edges.keys() if i[0] == 'c' and edges[i]>0]:
-        G.add_edge(edge[0], edge[1], capacity = edges[('c',) + edge],
-                   susceptance = edges[('x',) + edge])
-    return G
 
 
 def arrange_edge_minmax(edge_i, edge_j = []):
@@ -313,9 +327,9 @@ def build_cplex_problem():
     dvar_ub += [tot_demand for edge in all_edges for t in [1,2] for s in all_scenarios]
     dvar_type += ['C' for egge in all_edges for t in [1,2] for s in all_scenarios]
 
-    # define failed edges (only at initial failure and at the first cascade)
+    # define failed edges (only at the first cascade)
     dvar_name += ['F_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t1' + '_s' + str(s) for edge in all_edges for s in all_scenarios]
-    dvar_obj_coef += [0 for edge in all_edges for s in all_scenarios]
+    dvar_obj_coef += [args.penalize_failures for edge in all_edges for s in all_scenarios]
     dvar_lb += [0 for edge in all_edges for s in all_scenarios]
     dvar_ub += [1 for edge in all_edges for s in all_scenarios]
     dvar_type += ['B' for edge in all_edges for s in all_scenarios]
@@ -991,18 +1005,23 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     G = nx.Graph() # initialize empty graph
 
     # add all nodes
+    def add_cur_sol_cap(node_key):
+        if node_key in dvar_pos.keys():
+            return(current_solution[dvar_pos[node_key]])
+        else:
+            return(0)
+
+    # TODO: update the "generated" values later on to make sure that the initial state considers additional installations, if there were any (which are generators, not necessarily backups)
     node_list = [node[1] for node in nodes.keys() if node[0] == 'd']
-    add_nodes = [(cur_node, {'demand': nodes[('d', cur_node)],'gen_cap':nodes[('c', cur_node)] + current_solution[dvar_pos[('c', cur_node)]], 'generated':0, 'un_sup_cost':0, 'gen_cost':0, 'original_demand': nodes[('d', cur_node)]}) for cur_node in node_list]
+    add_nodes = [(cur_node, {'demand': nodes[('d', cur_node)],'gen_cap':nodes[('c', cur_node)] + add_cur_sol_cap('c_i' + cur_node), 'generated':0, 'un_sup_cost':0, 'gen_cost':0, 'original_demand': nodes[('d', cur_node)]}) for cur_node in node_list]
     G.add_nodes_from(add_nodes)
 
     # add all edges
-    # note an important change from the continuous case to the discrete case: the use of: current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale
-    # this means that the capacity can grow by line_capacity_coef_scale
     # should later on be introduced as part of the input.
     edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges if edge[0] == 'c']
 
-    add_edges_1 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0)]
-    add_edges_2 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (('X_', cur_edge) in dvar_pos.keys()) if (current_solution[dvar_pos[('X_', cur_edge)]]> 0.01)]
+    add_edges_1 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]], 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0)]
+    add_edges_2 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]], 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if ('X_i' + cur_edge[0] + '_j' + cur_edge[1] in dvar_pos.keys()) and (current_solution[dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]]> 0.01)]
 
     # Debugging
     #timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime()) + str(round(clock(), 3)) + ' - '
@@ -1068,12 +1087,9 @@ class IncumbentHeuristic(HeuristicCallback):
             run_heuristic_callback = False # deactivate the heuristic callback flag until lazy finds a better solution
 
 
-
-
-
 # ****************************************************
 # *************** Run the program ********************
 # ****************************************************
 
 if __name__ == '__main__':
-    main_program()
+    res_dict = main_program()
