@@ -113,15 +113,13 @@ def main_program():
         print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
         #print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
 
-        # export the obtained solution to a file
-        # compute total supply per scenario
-        current_solution = robust_opt_cplex.solution.get_values() + [robust_opt_cplex.solution.get_objective_value(), robust_opt_cplex.solution.MIP.get_mip_relative_gap()]
-        current_var_names = robust_opt_cplex.variables.get_names() + ['Objective', 'Opt. Gap.']
 
-        # write results to a file
-        if args.export_results_file:
-            timestamp = time.strftime('%d-%m-%Y %H-%M-%S-', time.gmtime()) + str(round(time.clock(), 3)) + ' - '
-            write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
+        # compute total supply per scenario
+        current_solution = robust_opt_cplex.solution.get_values() + \
+                           [robust_opt_cplex.solution.get_objective_value(), robust_opt_cplex.solution.MIP.get_mip_relative_gap(), args.budget, args.penalize_failures, args.instance_location]
+        current_var_names = robust_opt_cplex.variables.get_names() + \
+                           ['Objective', 'Opt. Gap.', 'PARAMS_budget', 'PARAMS_penalize_failures', 'PARAMS_instance']
+
 
         # print some interesting statistics per scenario
         tot_supply_sce = {cur_scenario: sum([current_solution[dvar_pos['w_i' + cur_node + '_t2_s' + cur_scenario]] for cur_node in all_nodes]) for cur_scenario in all_scenarios}
@@ -141,6 +139,16 @@ def main_program():
         tot_missed_sce_cascade = {cur_scenario: sum([nodes[('d', cur_node)] - cfe_dict_results[cur_scenario]['updated_grid_copy'].node[cur_node]['demand'] for cur_node in all_nodes]) for cur_scenario in all_scenarios}
         print "Supply per scenario (simulation):", tot_supply_sce_cascade
         print "Supply missed per scenario (simulation):", tot_missed_sce_cascade
+
+
+        # export the obtained solution to a file
+        current_var_names += [name_to_add for cur_scenario in all_scenarios for name_to_add in ['RES_tot_supply_sce' + cur_scenario, 'RES_tot_missed_sce' + cur_scenario, 'RES_tot_supply_cascade_sce' + cur_scenario, 'RES_tot_missed_cascade_sce' + cur_scenario]]
+        current_solution += [value_to_add for cur_scenario in all_scenarios for value_to_add in [tot_supply_sce[cur_scenario], tot_missed_sce[cur_scenario], tot_supply_sce_cascade[cur_scenario], tot_missed_sce_cascade[cur_scenario]]]
+
+        # write results to a file
+        if args.export_results_file:
+            timestamp = time.strftime('%d-%m-%Y %H-%M-%S-', time.gmtime()) + str(round(time.clock(), 3)) + ' - '
+            write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
 
         # Finish
         print "*** Program completed ***"
