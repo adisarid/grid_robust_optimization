@@ -39,7 +39,7 @@ parser.add_argument('--print_debug_function_tracking', help = "Print a message u
 parser.add_argument('--export_results_file', help = "Save the solution file with variable names", action = "store_true")
 parser.add_argument('--disable_cplex_messages', help = "Disables CPLEX's log, warning, error and results message streams", action = "store_true")
 parser.add_argument('--penalize_failures', help = "Attach penalization coefficient to first order cascade failures (specify value)", type = float, default = 0.0)
-parser.add_argument('--use_benders', help = "Use Bender's decomposition - default approach", action = "store_true")
+parser.add_argument('--use_benders', help = "Use Bender's decomposition", action = "store_true")
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -296,7 +296,7 @@ def build_cplex_problem():
     dvar_ub = [nodes[('c', i)] + nodes[('gen_up_ub', i)] for i in all_nodes for t in [1,2] for s in all_scenarios]
     dvar_type = ['C' for i in dvar_name]
 
-	# un-supplied demand variable (w_i_t_s)
+    # un-supplied demand variable (w_i_t_s)
     tmp_f = lambda t, s: scenarios[('s_pr', s)] if t==2 else 0
     dvar_name += ['w_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
     dvar_obj_coef += [tmp_f(t,s) for i in all_nodes for t in [1,2] for s in all_scenarios]
@@ -318,7 +318,7 @@ def build_cplex_problem():
     dvar_ub += [nodes[('gen_up_ub', i)] for i in all_nodes]
     dvar_type += ['C' for i in all_nodes]
 
-	# establish backup capacity at node i
+    # establish backup capacity at node i
     dvar_name += ['Z_i' + str(i) for i in all_nodes]
     dvar_obj_coef += [0 for i in all_nodes]
     dvar_lb += [0 for i in all_nodes]
