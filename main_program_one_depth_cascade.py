@@ -836,23 +836,23 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     counter = 0
 
     # define flow variables (continuous unbounded)
-    obj = [0]*len(G.edges())
-    types = 'C'*len(G.edges())
-    lb = [-1e20]*len(G.edges())
-    ub = [1e20]*len(G.edges())
+    obj = [0]*G.number_of_edges()
+    types = 'C'*G.number_of_edges()
+    lb = [-1e20]*G.number_of_edges()
+    ub = [1e20]*G.number_of_edges()
     names = ['flow' + str(curr_edge) for curr_edge in sorted_edges(G.edges())]
-    dvar_pos_flow.update({('flow', tuple(sorted(G.edges()[i]))):i+counter for i in range(len(G.edges()))})
+    dvar_pos_flow.update({('flow', tuple(sorted(G.edges().keys()[i]))): i + counter for i in range(G.number_of_edges())})
     find_flow.variables.add(obj = obj, types = types, lb = lb, ub = ub, names = names)
     counter += len(dvar_pos_flow)
 
     # define theta variables (continouous unbounded)
     names = ['theta' + str(curr_node) for curr_node in G.nodes()]
-    num_nodes = len(G.nodes())
-    dvar_pos_flow.update({('theta', G.nodes()[i]):i+counter for i in range(len(G.nodes()))})
+    num_nodes = G.number_of_nodes()
+    dvar_pos_flow.update({('theta', G.nodes().keys()[i]):i+counter for i in range(G.number_of_nodes())})
     find_flow.variables.add(obj = [0]*num_nodes, types = 'C'*num_nodes, lb = [-1e20]*num_nodes, ub = [1e20]*num_nodes, names = names)
 
     # Add phase angle (theta) flow constraints: theta_i-theta_j-x_{ij}f_{ij} = 0
-    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('flow', curr_edge)]], [1.0, -1.0, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]] for curr_edge in sorted_edges(G.edges())]
+    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('flow', curr_edge)]], [1.0, -1.0, -G.edges[curr_edge]['susceptance']]] for curr_edge in sorted_edges(G.edges().keys())]
     find_flow.linear_constraints.add(lin_expr = phase_constraints, senses = "E"*len(phase_constraints), rhs = [0]*len(phase_constraints))
 
     # Add general flow constraints. formation is: incoming edges - outgoing edges + generation
@@ -898,7 +898,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     find_flow_vars = find_flow.solution.get_values()
 
     # Set the failed edges
-    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if abs(find_flow_vars[dvar_pos_flow[('flow', edge)]]) > G.edge[edge[0]][edge[1]]['capacity']]
+    new_failed_edges = [edge for edge in sorted_edges(G.edges().keys()) if abs(find_flow_vars[dvar_pos_flow[('flow', edge)]]) > G.edges[edge]['capacity']]
 
     # just in case you want an lp file - for debugging purposes.
 
