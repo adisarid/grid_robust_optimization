@@ -37,12 +37,13 @@ def main_program():
 
 
 def export_raw_csv_edges(G, filename):
-    header_row = ['node1', 'node2', 'capacity', 'susceptance', 'cost_fixed', 'cost_linear']
+    total_edges_to_add_prc = 0.1 # add up to 10% new edges
+    header_row = ['node1', 'node2', 'capacity', 'reactance', 'cost_fixed', 'cost_linear']
     content_list = [[edge[0], edge[1], G.edges[edge]['capacity'], G.edges[edge]['susceptance'], 0.0, 0.1] for edge in G.edges()] # existing edges
     # randomize new edges:
     random.seed(0)
     new_edges_to_add = [random.sample(G.nodes.keys(), 2) + [0, 1, 1.0, 0.1]
-                        for i in range(G.number_of_edges())]
+                        for i in range(math.ceil(G.number_of_edges()*total_edges_to_add_prc))]
                         # node1, node2, capacity=0, suscenptance=1, fixed cost = 1, variable cost = 0.1
     # make sure that these are not repeating (old) edges in the new edges' list
     new_edges_to_add = [i for i in new_edges_to_add if not (i[0], i[1]) in G.edges()]
@@ -66,7 +67,7 @@ def export_raw_csv_nodes(G, filename):
 def export_scenarios(G, directory):
     # Create scenarios by randomizing failing edges from G (for simplicity, only existing edges are considered)
     prc_fail = 0.1
-    num_iters = 50 # generate up to 50 failure scenarios
+    num_iters = 5 # generate up to num_iters failure scenarios
     random.seed(0)
     tabu_list_scenarios = [] # defined to avoid repeating scenarios
     internal_counter = 0
@@ -77,7 +78,12 @@ def export_scenarios(G, directory):
         # make sure current starting conditions were not tested so far
         # WARNING: the counter increases only when new option is found.
         # in small instances * small choice of failures this might lead to an infinite loop
-        if not tmp_rand in tabu_list_scenarios:
+        # Also check that this scenario has an initial flow solution, i.e.,
+        # the demand does not exceed generation capacity in each component
+        component_wise_demand = [sum([G.node[node_i]['demand'] for node_i in subGr]) <
+                          sum([G.node[node_i]['gen_cap'] for node_i in subGr])
+                          for subGr in nx.connected_components(G)]
+        if not tmp_rand in tabu_list_scenarios and all(component_wise_demand):
             internal_counter += 1
             tabu_list_scenarios += [
                 tmp_rand]  # update the tabu list to include the current iteration (represented as a tuple)
