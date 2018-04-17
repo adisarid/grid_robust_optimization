@@ -43,7 +43,7 @@ def export_raw_csv_edges(G, filename):
     # randomize new edges:
     random.seed(0)
     new_edges_to_add = [random.sample(G.nodes.keys(), 2) + [0, 1, 1.0, 0.1]
-                        for i in range(math.ceil(G.number_of_edges()*total_edges_to_add_prc))]
+                        for i in range(int(math.ceil(G.number_of_edges()*total_edges_to_add_prc)))]
                         # node1, node2, capacity=0, suscenptance=1, fixed cost = 1, variable cost = 0.1
     # make sure that these are not repeating (old) edges in the new edges' list
     new_edges_to_add = [i for i in new_edges_to_add if not (i[0], i[1]) in G.edges()]
