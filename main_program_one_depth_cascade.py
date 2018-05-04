@@ -40,6 +40,7 @@ parser.add_argument('--export_results_file', help = "Save the solution file with
 parser.add_argument('--disable_cplex_messages', help = "Disables CPLEX's log, warning, error and results message streams", action = "store_true")
 parser.add_argument('--penalize_failures', help = "Attach penalization coefficient to first order cascade failures (specify value)", type = float, default = 0.0)
 parser.add_argument('--use_benders', help = "Use Bender's decomposition", action = "store_true")
+parser.add_argument('--scenario_variant', help = "*** NOT IMPLEMENTED YET *** Select a scenario variant for given instance, i.e. load scenario_failures_VARIANTNAME.csv and scenario_probabilities_VARIANTNAME.csv", type = str, default = "")
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -149,6 +150,12 @@ def main_program():
         if args.export_results_file:
             timestamp = time.strftime('%d-%m-%Y %H-%M-%S-', time.gmtime()) + str(round(time.clock(), 3)) + ' - '
             write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
+            with open('c:/temp/grid_cascade_output/' + timestamp + 'supply.csv', 'wb') as csvfile:
+                solutionwriter = csv.writer(csvfile, delimiter=',')
+                solutionwriter.writerow(['scenario', 'type', 'value'])
+                solutionwriter.writerows([[i, '1depth', tot_supply_sce[i]] for i in tot_supply_sce.keys()])
+                solutionwriter.writerows([[i, 'fullcascade', tot_supply_sce_cascade[i]] for i in tot_supply_sce_cascade.keys()])
+
 
         # Finish
         print "*** Program completed ***"
@@ -196,7 +203,7 @@ def read_scenarios(filename_fail, filename_pr):
 
     with open(filename_fail, 'rb') as failurefile:
         csv_reader = csv.reader(failurefile, delimiter = ',')
-        next(csv_reader) # assuimng header, skip first line
+        next(csv_reader) # assuming header, skip first line
         for row in csv_reader:
             if ('s', row[0]) in dic.keys():
                 dic[('s', row[0])] += [arrange_edge_minmax(row[1], row[2])] # failures
@@ -307,8 +314,8 @@ def build_cplex_problem():
     # phase angle (theta_i_t_s) variables
     dvar_name += ['theta_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
     dvar_obj_coef += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
-    dvar_lb += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
-    dvar_ub += [360 for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_lb += [-100000 for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_ub += [100000 for i in all_nodes for t in [1,2] for s in all_scenarios]
     dvar_type += ['C' for i in all_nodes for t in [1,2] for s in all_scenarios]
 
     # capacity upgrade of node
@@ -397,6 +404,9 @@ def create_cplex_object():
     flow_constraints = [[flow_lhs[constraint], flow_lhs_coef[constraint]] for constraint in range(len(flow_lhs))]
     flow_rhs = [nodes[('d', i)] for i in all_nodes for s in all_scenarios]
     robust_opt.linear_constraints.add(lin_expr = flow_constraints, senses = "E"*len(flow_constraints), rhs = flow_rhs)
+    #flow_rhs = [nodes[('d', i)] for i in all_nodes for s in all_scenarios]  # TESTING HERE TO SEE WHAT WENT WRONG!!!
+    #robust_opt.linear_constraints.add(lin_expr=flow_constraints, senses="G" * len(flow_constraints),
+    #                                  rhs=flow_rhs)  # TESTING HERE TO SEE WHAT WENT WRONG!!!
 
     # reactive power constraints for t=1, existing (non-failed) edges:
     reactive_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t1' + '_s' + s],\
