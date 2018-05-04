@@ -21,6 +21,10 @@ import case57 as instance57
 import case118 as instance118
 import case300 as instance300
 
+# the following parameters control the size of the problem
+total_edges_to_add_prc = 0.2 # proportion of newely tested edges (for establishment)
+num_iters = 10 # generate up to num_iters failure scenarios
+
 def main_program():
     run_grids = ['instance24', 'instance30', 'instance39', 'instance57', 'instance118', 'instance300']
 
@@ -37,7 +41,7 @@ def main_program():
 
 
 def export_raw_csv_edges(G, filename):
-    total_edges_to_add_prc = 0.1 # add up to 10% new edges
+    global total_edges_to_add_prc
     header_row = ['node1', 'node2', 'capacity', 'reactance', 'cost_fixed', 'cost_linear']
     content_list = [[edge[0], edge[1], G.edges[edge]['capacity'], G.edges[edge]['susceptance'], 0.0, 0.1] for edge in G.edges()] # existing edges
     # randomize new edges:
@@ -67,7 +71,7 @@ def export_raw_csv_nodes(G, filename):
 def export_scenarios(G, directory):
     # Create scenarios by randomizing failing edges from G (for simplicity, only existing edges are considered)
     prc_fail = 0.1
-    num_iters = 5 # generate up to num_iters failure scenarios
+    global num_iters
     random.seed(0)
     tabu_list_scenarios = [] # defined to avoid repeating scenarios
     internal_counter = 0
@@ -80,9 +84,11 @@ def export_scenarios(G, directory):
         # in small instances * small choice of failures this might lead to an infinite loop
         # Also check that this scenario has an initial flow solution, i.e.,
         # the demand does not exceed generation capacity in each component
-        component_wise_demand = [sum([G.node[node_i]['demand'] for node_i in subGr]) <
-                          sum([G.node[node_i]['gen_cap'] for node_i in subGr])
-                          for subGr in nx.connected_components(G)]
+        omittedG = G.copy()
+        omittedG.remove_edges_from(tmp_rand)
+        component_wise_demand = [sum([omittedG.node[node_i]['demand'] for node_i in subGr]) <
+                          sum([omittedG.node[node_i]['gen_cap'] for node_i in subGr])
+                          for subGr in nx.connected_components(omittedG)]
         if not tmp_rand in tabu_list_scenarios and all(component_wise_demand):
             internal_counter += 1
             tabu_list_scenarios += [
