@@ -314,8 +314,8 @@ def build_cplex_problem():
     # phase angle (theta_i_t_s) variables
     dvar_name += ['theta_i' + str(i) + '_t' + str(t) + '_s' + str(s) for i in all_nodes for t in [1,2] for s in all_scenarios]
     dvar_obj_coef += [0 for i in all_nodes for t in [1,2] for s in all_scenarios]
-    dvar_lb += [-100000 for i in all_nodes for t in [1,2] for s in all_scenarios]
-    dvar_ub += [100000 for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_lb += [-10000000 for i in all_nodes for t in [1,2] for s in all_scenarios]
+    dvar_ub += [10000000 for i in all_nodes for t in [1,2] for s in all_scenarios]
     dvar_type += ['C' for i in all_nodes for t in [1,2] for s in all_scenarios]
 
     # capacity upgrade of node
