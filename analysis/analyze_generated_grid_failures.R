@@ -5,7 +5,9 @@ library(tidyverse)
 library(GGally)
 library(network)
 
-generate.coordinates.distances <- function(graph.dir = "instance39", calc.dist.matrix = TRUE){
+generate.coordinates.distances <- function(graph.dir = "instance39", 
+                                           calc.dist.matrix = TRUE, 
+                                           export.results = FALSE){
   base.dir <- "c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\"
   
   edges <- read_csv(paste0(base.dir, graph.dir, "\\grid_edges.csv")) %>%  
@@ -56,14 +58,18 @@ generate.coordinates.distances <- function(graph.dir = "instance39", calc.dist.m
       left_join(edges %>% select(from_node, to_node, capacity)) %>%
       filter(is.na(capacity)) %>%
       select(-capacity)  
+    if (export.results){
+      write_csv(path = paste0(base.dir, graph.dir, "\\edges_distances.csv"),
+                grid.distances)
+    }
     
-    write_csv(path = paste0(base.dir, graph.dir, "\\edges_distances.csv"),
-              grid.distances)
   }
   
+  if (export.results) {
+    write_csv(path = paste0(base.dir, graph.dir, "\\coordinates.csv"),
+              x = grid.plot$data %>% select(label, x, y))
+  }
   
-  write_csv(path = paste0(base.dir, graph.dir, "\\coordinates.csv"),
-            x = grid.plot$data %>% select(label, x, y))
   
   return(grid.plot)  
 }
