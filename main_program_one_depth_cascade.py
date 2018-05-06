@@ -50,7 +50,7 @@ args = parser.parse_args()
 # ****** Define global variables related to global parameters ******
 # ******************************************************************
 epsilon = 1e-3
-bigM = 1.0/epsilon
+bigM = 10000
 instance_location = os.getcwd() + '\\' + args.instance_location + '\\'
 
 
@@ -110,7 +110,7 @@ def main_program():
     print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
     # the following line prints the corresponding status string
     print robust_opt_cplex.solution.status[robust_opt_cplex.solution.get_status()]
-    if robust_opt_cplex.solution.get_status != 103:
+    if robust_opt_cplex.solution.get_status() != 103:
         print "Objective value = " , robust_opt_cplex.solution.get_objective_value()
         #print "User cuts applied: " + str(robust_opt_cplex.solution.MIP.get_num_cuts(robust_opt_cplex.solution.MIP.cut_type.user))
 
@@ -160,6 +160,8 @@ def main_program():
         # Finish
         print "*** Program completed ***"
         return({'cfe_dict_results': cfe_dict_results, 'current_solution': current_solution})
+    else:
+        print "*** Program completed *** ERROR: No solution found."
 
 
 
@@ -404,15 +406,12 @@ def create_cplex_object():
     flow_constraints = [[flow_lhs[constraint], flow_lhs_coef[constraint]] for constraint in range(len(flow_lhs))]
     flow_rhs = [nodes[('d', i)] for i in all_nodes for s in all_scenarios]
     robust_opt.linear_constraints.add(lin_expr = flow_constraints, senses = "E"*len(flow_constraints), rhs = flow_rhs)
-    #flow_rhs = [nodes[('d', i)] for i in all_nodes for s in all_scenarios]  # TESTING HERE TO SEE WHAT WENT WRONG!!!
-    #robust_opt.linear_constraints.add(lin_expr=flow_constraints, senses="G" * len(flow_constraints),
-    #                                  rhs=flow_rhs)  # TESTING HERE TO SEE WHAT WENT WRONG!!!
 
     # reactive power constraints for t=1, existing (non-failed) edges:
     reactive_lhs = [[dvar_pos['theta_i' + cur_edge[0] + '_t1' + '_s' + s],\
                      dvar_pos['theta_i' + cur_edge[1] + '_t1' + '_s' + s], \
-                     dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1' + '_s' + s]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)]]
-    reactive_lhs_coef = [[1, -1, -edges[('x',) + cur_edge]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)]]
+                     dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1' + '_s' + s]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s',s)] and edges[('H', ) + cur_edge] > 0]
+    reactive_lhs_coef = [[1, -1, -edges[('x',) + cur_edge]] for cur_edge in all_edges for s in all_scenarios if cur_edge not in scenarios[('s', s)] and edges[('H', ) + cur_edge] > 0]
     reactive_constraints = [[reactive_lhs[constraint], reactive_lhs_coef[constraint]] for constraint in range(len(reactive_lhs))]
     robust_opt.linear_constraints.add(lin_expr = reactive_constraints, senses = "E"*len(reactive_constraints), rhs = [0]*len(reactive_constraints))
 
