@@ -148,7 +148,7 @@ def main_program():
     robust_opt_cplex.parameters.timelimit.set(totruntime) # set run time limit
 
     # enable multithread search
-    robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
+    #robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
 
     robust_opt_cplex.solve()  #solve the model
 
