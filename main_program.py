@@ -26,12 +26,12 @@ from time import gmtime, strftime, clock, time # for placing timestamp on debug 
 
 
 
-# ************************************************
-# Define global variables related to debuggin mode
-# ************************************************
+# **************************************************
+# Define global variables related to debugging mode
+# **************************************************
 print_debug = False # should I print the output to a file?
-print_debug_verbose = False # should I print out verbose steps of lazy constraints?
-print_debug_function_tracking = False # should I print location when entering each subroutine?
+print_debug_verbose = True# should I print out verbose steps of lazy constraints?
+print_debug_function_tracking = True # should I print location when entering each subroutine?
 write_mid_run_res_files = False # should I write the lazy iterations' solutions
 write_res_file = True # # should I write the solution to a file (when the process completes)
 write_lp_file = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disabled by default
@@ -98,7 +98,7 @@ else:
 # Define some more parameters related to the problem size and difficulty
 # **********************************************************************
 if len(sys.argv) <= 5:
-    line_capacity_coef_scale = 15 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
+    line_capacity_coef_scale = 3 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 else:
     line_capacity_coef_scale = float(sys.argv[5])
 
@@ -846,18 +846,18 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     lb = [-1e20]*len(G.edges())
     ub = [1e20]*len(G.edges())
     names = ['f' + str(curr_edge) for curr_edge in sorted_edges(G.edges())]
-    dvar_pos_flow.update({('f', tuple(sorted(G.edges()[i]))):i+counter for i in range(len(G.edges()))})
+    dvar_pos_flow.update({('f', tuple(sorted(list(G.edges)[i]))):i+counter for i in range(len(G.edges()))})
     find_flow.variables.add(obj = obj, types = types, lb = lb, ub = ub, names = names)
     counter += len(dvar_pos_flow)
 
     # define theta variables (continouous unbounded)
     names = ['theta' + str(curr_node) for curr_node in G.nodes()]
     num_nodes = len(G.nodes())
-    dvar_pos_flow.update({('theta', G.nodes()[i]):i+counter for i in range(len(G.nodes()))})
+    dvar_pos_flow.update({('theta', list(G.nodes)[i]):i+counter for i in range(len(G.nodes()))})
     find_flow.variables.add(obj = [0]*num_nodes, types = 'C'*num_nodes, lb = [-1e20]*num_nodes, ub = [1e20]*num_nodes, names = names)
 
     # Add phase angle (theta) flow constraints: theta_i-theta_j-x_{ij}f_{ij} = 0
-    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('f', curr_edge)]], [1.0, -1.0, -G.edge[curr_edge[0]][curr_edge[1]]['susceptance']]] for curr_edge in sorted_edges(G.edges())]
+    phase_constraints = [[[dvar_pos_flow[('theta', curr_edge[0])], dvar_pos_flow[('theta', curr_edge[1])], dvar_pos_flow[('f', curr_edge)]], [1.0, -1.0, -G.edges[curr_edge[0],curr_edge[1]]['susceptance']]] for curr_edge in sorted_edges(G.edges())]
     find_flow.linear_constraints.add(lin_expr = phase_constraints, senses = "E"*len(phase_constraints), rhs = [0]*len(phase_constraints))
 
     # Add general flow constraints. formation is: incoming edges - outgoing edges + generation
@@ -903,7 +903,7 @@ def grid_flow_update(G, failed_edges = [], write_lp = False, return_cplex_object
     find_flow_vars = find_flow.solution.get_values()
 
     # Set the failed edges
-    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if abs(find_flow_vars[dvar_pos_flow[('f', edge)]]) > G.edge[edge[0]][edge[1]]['capacity']]
+    new_failed_edges = [edge for edge in sorted_edges(G.edges()) if abs(find_flow_vars[dvar_pos_flow[('f', edge)]]) > G.edges[edge[0],edge[1]]['capacity']]
 
     # just in case you want an lp file - for debugging purposes.
 
