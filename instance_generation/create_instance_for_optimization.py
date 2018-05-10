@@ -22,8 +22,8 @@ import case118 as instance118
 import case300 as instance300
 
 # the following parameters control the size of the problem
-total_edges_to_add_prc = 0.2 # proportion of newely tested edges (for establishment)
-num_iters = 10 # generate up to num_iters failure scenarios
+total_edges_to_add_prc = 0.3 # proportion of newely tested edges (for establishment)
+num_iters = 50 # generate up to num_iters failure scenarios
 
 def main_program():
     run_grids = ['instance24', 'instance30', 'instance39', 'instance57', 'instance118', 'instance300']
