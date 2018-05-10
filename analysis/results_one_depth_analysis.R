@@ -91,17 +91,33 @@ ggplot(aggregated.full.cascade, aes(x = budget, y = mean.objective.prc, color = 
   ggtitle("Objective value (relative to max)\nShowing full cascade, optimization based on 1depth approx")
 
 
+# ==== Sumarizing comparison full cascade and 1depth approximation
+full.compare.tmp <- full.res.scenarios %>%
+  ungroup() %>%
+  select(instance:`full cascade`) %>%
+  select(-objective) %>%
+  group_by(instance, budget) %>%
+  summarize(`1depth` = mean(`1depth approx`),
+            `full` = mean(`full cascade`)) %>%
+  gather(type, value, -instance, -budget)
 
-ggplot(full.res.scenarios %>%
-         ungroup() %>%
-         select(instance:`full cascade`) %>%
-         select(-objective) %>%
-         group_by(instance, budget) %>%
-         summarize(`1depth` = mean(`1depth approx`),
-                   `full` = mean(`full cascade`)) %>%
-         gather(type, value, -instance, -budget), 
-       aes(x = budget, y = value, linetype = type, color = instance)) + 
-  geom_point() + 
-  geom_line() -> plot1
+maximum.value <- full.compare %>%
+  group_by(instance) %>%
+  summarize(maximum.value = max(value))
 
-ggplotly(plot1)
+full.compare <- full.compare.tmp %>%
+  left_join(maximum.value) %>%
+  mutate(normalized.value = value/maximum.value)
+
+compare.plot <- 
+  ggplot(full.compare, 
+       aes(x = budget, y = normalized.value, linetype = type, color = instance)) + 
+  geom_point(size = 2, color = "black", alpha = 0.6) + 
+  geom_line(size = 1, alpha = 0.6) + 
+  facet_wrap(~instance) + 
+  scale_y_continuous(labels = scales::percent) +
+  ylab("Objective, relative to maximum supply") +
+  xlab("Budget") + 
+  ggtitle("Optimization by 1-depth approximation and results of full cascade, as a function of budget")
+
+
