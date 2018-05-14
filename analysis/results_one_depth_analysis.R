@@ -3,7 +3,8 @@
 library(tidyverse)
 library(stringr)
 
-res.files <- dir("c:/temp/grid_cascade_output/", pattern = "*temp_sol.csv", full.names = T)
+scenarios.test.set <- "10 failure scenarios/"
+res.files <- dir(paste0("c:/temp/grid_cascade_output/", scenarios.test.set), pattern = "*temp_sol.csv", full.names = T)
 
 loadres <- function(path){
   tmp.file <- read_csv(path, col_types = "cc")
@@ -67,7 +68,7 @@ load.sce.res <- function(path){
 full.res.scenarios <- tibble(filename = res.files) %>%
   group_by(filename) %>%
   mutate(res = map(.x = filename, .f = load.sce.res)) %>%
-  unnest()
+  unnest() 
 
 ggplot(full.res.scenarios, aes(x = budget, y = full.cascade.prop)) + 
   geom_point(alpha = 0.5) +
@@ -101,7 +102,7 @@ full.compare.tmp <- full.res.scenarios %>%
             `full` = mean(`full cascade`)) %>%
   gather(type, value, -instance, -budget)
 
-maximum.value <- full.compare %>%
+maximum.value <- full.compare.tmp %>%
   group_by(instance) %>%
   summarize(maximum.value = max(value))
 
@@ -112,12 +113,21 @@ full.compare <- full.compare.tmp %>%
 compare.plot <- 
   ggplot(full.compare, 
        aes(x = budget, y = normalized.value, linetype = type, color = instance)) + 
-  geom_point(size = 2, color = "black", alpha = 0.6) + 
-  geom_line(size = 1, alpha = 0.6) + 
+  geom_point(size = 2, color = "black") + 
+  geom_line(size = 1) + 
   facet_wrap(~instance) + 
   scale_y_continuous(labels = scales::percent) +
-  ylab("Objective, relative to maximum supply") +
-  xlab("Budget") + 
-  ggtitle("Optimization by 1-depth approximation and results of full cascade, as a function of budget")
+  ylab("Objective\n% relative to max supply") +
+  xlab("Budget [$]") #+ 
+  #ggtitle("Optimization by 1-depth approximation and results of full cascade, as a function of budget")
 
+if (scenarios.test.set == "50 failure scenarios/"){
+  ggsave(path = "C:\\Users\\Adi Sarid\\Documents\\GitHub\\Draft-design-robustness\\figures\\",
+         filename = "optimization_50_scenarios_1depth_full_comparison.eps",
+         plot = compare.plot, width = 18, height = 10, units = "cm")
+} else {
+  ggsave(path = "C:\\Users\\Adi Sarid\\Documents\\GitHub\\Draft-design-robustness\\figures\\",
+         filename = "optimization_10_scenarios_1depth_full_comparison.eps",
+         plot = compare.plot, width = 18, height = 10, units = "cm")
+}
 
