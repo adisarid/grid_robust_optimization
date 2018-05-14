@@ -41,7 +41,6 @@ parser.add_argument('--disable_cplex_messages', help = "Disables CPLEX's log, wa
 parser.add_argument('--penalize_failures', help = "Attach penalization coefficient to first order cascade failures (specify value)", type = float, default = 0.0)
 parser.add_argument('--use_benders', help = "Use Bender's decomposition", action = "store_true")
 parser.add_argument('--scenario_variant', help = "*** NOT IMPLEMENTED YET *** Select a scenario variant for given instance, i.e. load scenario_failures_VARIANTNAME.csv and scenario_probabilities_VARIANTNAME.csv", type = str, default = "")
-
 # ... add additional arguments as required here ..
 args = parser.parse_args()
 
@@ -346,7 +345,7 @@ def build_cplex_problem():
 
     # define failed edges (only at the first cascade)
     dvar_name += ['F_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t1' + '_s' + str(s) for edge in all_edges for s in all_scenarios]
-    dvar_obj_coef += [args.penalize_failures for edge in all_edges for s in all_scenarios]
+    dvar_obj_coef += [-1*(args.penalize_failures) for edge in all_edges for s in all_scenarios]
     dvar_lb += [0 for edge in all_edges for s in all_scenarios]
     dvar_ub += [1 for edge in all_edges for s in all_scenarios]
     dvar_type += ['B' for edge in all_edges for s in all_scenarios]
