@@ -25,53 +25,82 @@ import networkx as nx
 from time import gmtime, strftime, clock, time # for placing timestamp on debug solution files, and checking run time
 
 
+# ************************************************
+# ******* Parse from command line args ***********
+# ************************************************
+import argparse
+parser = argparse.ArgumentParser(description = "Run a Power Grid Robust Optimization of full cascade depth (PGRO2) with Lazy constraints callback.")
+parser.add_argument('--instance_location', help = "Provide the location for instance files (directory name)", type = str, default = "case30")
+parser.add_argument('--time_limit', help = "Set a time limit for CPLEX run (in hours)", type = float, default = 0.5)
+parser.add_argument('--opt_gap', help = "Optimality gap for CPLEX run", type = float, default = 0.01) # 0.01 = 1%
+parser.add_argument('--budget', help = "Budget constraint for optimization problem", type = float, default = 100.0)
+parser.add_argument('--print_lp', help = "Export c:/temp/grid_cascade_output/tmp_robust_1_cascade.lp", action = "store_true")
+parser.add_argument('--print_debug_function_tracking', help = "Print a message upon entering each function", action = "store_true")
+parser.add_argument('--export_results_file', help = "Save the solution file with variable names", action = "store_true")
+parser.add_argument('--disable_cplex_messages', help = "Disables CPLEX's log, warning, error and results message streams", action = "store_true")
+parser.add_argument('--penalize_failures', help = "Attach penalization coefficient to first order cascade failures (specify value)", type = float, default = 0.0)
+parser.add_argument('--use_benders', help = "Use Bender's decomposition", action = "store_true")
+parser.add_argument('--scenario_variant', help = "*** NOT IMPLEMENTED YET *** Select a scenario variant for given instance, i.e. load scenario_failures_VARIANTNAME.csv and scenario_probabilities_VARIANTNAME.csv", type = str, default = "")
+parser.add_argument('--print_debug', help = "Should I print the screen output to a file instead? (mainly used for debugging)", action = "store_true")
+parser.add_argument('--print_debug_verbose', help = "Should I print out a verbose output of the lazy constraints steps?", action = "store_true")
+parser.add_argument('--write_mid_run_results_files', help = "Should I track and save the results in each lazy iteration?", action = "store_true")
+parser.add_argument('--print_CFE_mid_run_results', help = "Should I print each cfe simulation results - which edges failed and which survived?", action = "store_true")
+parser.add_argument('--limit_lazy_add', help = "Should I limit the number of lazy constraints added? [-1 for unlimited]", type = float, default = -1)
+parser.add_argument('--incumbent_display_frequency', help = "Frequency to show incumbent solution", type = float, default = 0.05)
+parser.add_argument('--max_cascade_depth', help = "The maximal cascade depth to examine in the simulation", type = float, default = 100)
+parser.add_argument('--percent_short_runs', help = 'What % of cases should have a "short run" (stop simulation after max_cascade_depth). When 0.0 then short runs are disabled',
+                    type =  float, default = 0.0)
+parser.add_argument('--set_dvar_priorities', help = "Shuold I set decision variable priorities?", action = "store_true")
+parser.add_argument('--line_cost_coef_scale', help = "Coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos",
+                    type = float, default = 5.0)
+parser.add_argument('--line_capacity_coef_scale', help = "Capacity coefficient for new transmission lines and upgrades",
+                    type = float, default = 5.0)
+
+# ... add additional arguments as required here ..
+args = parser.parse_args()
+
+
 
 # **************************************************
 # Define global variables related to debugging mode
 # **************************************************
-print_debug = False # should I print the output to a file?
-print_debug_verbose = True# should I print out verbose steps of lazy constraints?
-print_debug_function_tracking = True # should I print location when entering each subroutine?
-write_mid_run_res_files = False # should I write the lazy iterations' solutions
-write_res_file = True # # should I write the solution to a file (when the process completes)
-write_lp_file = False #"c:/temp/grid_cascade_output/lp_form/single_type1_step" + str(i) + ".lp" # For debugging purpuses I added writing the lp files. Disabled by default
-print_cfe_results = False # should I print each cfe simulation results - which edges failed and which survived?
-limit_lazy_add = -1 # should I limit the number of lazy constraints added at each iteration. Use -1 for unlimited.
-incumbent_display_frequency = 0.05 #0.05 # percent cases to display incumbent
+print_debug = args.print_debug
+print_debug_function_tracking = args.print_debug_function_tracking
+print_debug_verbose = args.print_debug_verbose
+write_mid_run_res_files = args.write_mid_run_results_files
+write_res_file = args.export_results_file
+print_cfe_results = args.print_CFE_mid_run_results
+limit_lazy_add = args.limit_lazy_add
+incumbent_display_frequency = args.incumbent_display_frequency
+
+# The following are used to track the time spent in solution tree (CPLEX) vs. cascade simulation
 time_spent_total = 0 # total time spent on solving the problem
 time_spent_cascade_sim = 0 # total time spent on cascade simulator
-append_solution_statistics = 'c:\\temp\\solution_statistics.csv' # if set as False will not update this file
-
 
 
 # ******************************************************************
 # Define global variables related to global parameters and callbacks
+# Based on input args and on global variabels
 # ******************************************************************
 
 # set location of data directory from input arguments:
-if len(sys.argv) == 1:
-    instance_location = os.getcwd() + '\\case30\\'
-else:
-    instance_location = os.getcwd() + '\\' + sys.argv[1] + '\\'
-    from time import strftime, clock, gmtime
-    append_solution_statistics = "c:\\temp\\grid_cascade_output\\" + strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - ' + sys.argv[1] + '_solution_statistics.csv'
-    with open(append_solution_statistics, 'ab') as f:
-                writer = csv.writer(f)
-                writer.writerow(["line_cost_coef_scale", "line_capacity_coef_scale", "set_decision_var_priorities", "runtime", "net_runtime_simulations", "best_incumbent"])
+instance_location = os.getcwd() + '\\' + args.instance_location + '\\'
+
+from time import strftime, clock, gmtime
+append_solution_statistics = "c:\\temp\\grid_cascade_output\\" + strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - ' + args.instance_location + '_solution_statistics.csv'
+with open(append_solution_statistics, 'ab') as f:
+    writer = csv.writer(f)
+    writer.writerow(["line_cost_coef_scale", "line_capacity_coef_scale", "set_decision_var_priorities", "runtime", "net_runtime_simulations", "best_incumbent"])
 
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
 incumbent_solution_from_lazy = {} # incumbent solution (dictionary): solution by cplex with failures.
 epsilon = 1e-3
 bigM = 1.0/epsilon
-epgap = 0.01 # optimality gap target, e.g., 0.01 = 1%
+epgap = args.opt_gap # optimality gap target, e.g., 0.01 = 1%
 
 # set runtime limit from input arguments (input argument should be in hours)
-if len(sys.argv) <= 2:
-    totruntime = 0.5*60*60 # in seconds. Default set at 30 minutes
-else:
-    totruntime = float(sys.argv[2])*60*60
-
+totruntime = args.time_limit*60*60
 
 # *************************************************************************************************
 # Define global variables related to the convergence:
@@ -79,36 +108,19 @@ else:
 # Should use decision variables priorities?
 # *************************************************************************************************
 # the following definitions control the maximum number of cascades which the simulation should check, in proportion of cases
-max_cascade_depth = 2 # where should the simulation be cut
+max_cascade_depth = args.max_cascade_depth # where should the simulation be cut
 
 # set proportion of short runs from input if given
-if len(sys.argv) <= 3:
-    prop_cascade_cut = 0.00 # what % of cases should have a "short run" (stop simulation after max_cascade_depth). When 0.0 then short runs are disabled (default)
-else:
-    prop_cascade_cut = float(sys.argv[3])
+prop_cascade_cut = args.percent_short_runs
 
 # set decision variable priorities?
-if len(sys.argv) <= 4:
-    set_decision_var_priorities = True
-else:
-    set_decision_var_priorities = (sys.argv[4] != 'False' and sys.argv[4] != '0')
-
+set_decision_var_priorities = args.set_dvar_priorities
 
 # **********************************************************************
 # Define some more parameters related to the problem size and difficulty
 # **********************************************************************
-if len(sys.argv) <= 5:
-    line_capacity_coef_scale = 3 # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
-else:
-    line_capacity_coef_scale = float(sys.argv[5])
-
-
-if len(sys.argv) <= 6:
-    line_cost_coef_scale = 1 #15 # coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos
-else:
-    line_cost_coef_scale = float(sys.argv[6])
-
-
+line_capacity_coef_scale = args.line_capacity_coef_scale # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
+line_cost_coef_scale = args.line_cost_coef_scale # the cost coefficient of adding an edge. 1 by default.
 
 # ****************************************************
 # ******* The main program ***************************
@@ -130,7 +142,7 @@ def main_program():
     nodes = read_nodes(instance_location + 'grid_nodes.csv')
     edges = read_edges(instance_location + 'grid_edges.csv')
     scenarios = read_scenarios(instance_location + 'scenario_failures.csv', instance_location + 'scenario_probabilities.csv')
-    params = read_additional_param(instance_location + 'additional_params.csv')
+    params = {'C': args.budget}
 
     # build problem
     build_results = build_cplex_problem()
@@ -341,8 +353,8 @@ def build_cplex_problem():
             dvar_name.append('theta_' + cur_node + 's' + cur_scenario)
             dvar_pos[('theta', cur_node, cur_scenario)] = len(dvar_name)-1
             dvar_obj_coef.append(0)
-            dvar_lb.append(0)
-            dvar_ub.append(360)
+            dvar_lb.append(-10000)
+            dvar_ub.append(10000)
             dvar_type.append('C')
 
         # capacity upgrade of node (independent of scenario)
