@@ -19,6 +19,8 @@ import os
 import csv
 import networkx as nx
 import time
+import collections
+import random
 
 
 # ************************************************
@@ -55,28 +57,91 @@ def main_program():
     current_time = time.time()
     nodes = read_nodes(instance_location + 'grid_nodes.csv')
     edges = read_edges(instance_location + 'grid_edges.csv')
+
     scenarios = read_scenarios(instance_location + 'scenario_failures.csv',
                                instance_location + 'scenario_probabilities.csv')
 
-    # build a basic networkx object which will be used to hold the solution
+    # build a basic networkx object which will be used to hold the solution, and serve as an initial solution
     current_grid = create_power_grid(nodes, edges)
-    current_supply = list()  # retains the history of objective function values
+    current_grid_outcome = compute_current_supply(current_grid.copy(), scenarios)
+    current_supply = [current_grid_outcome['supply']]  # retains the history of objective function values
     continue_flag = True  # will be used as a flag when stopping criteria is matched
+
+    # select upgrade/downgrade quants - mean of existing edge's capacity divided by 2 # TODO: something smarter
+    existing_capacities = [edges[cur_edge] for cur_edge in edges.keys() if cur_edge[0] == 'c' and edges[cur_edge] > 0]
+    global upgrade_downgrade_step
+    upgrade_downgrade_step = (float(sum(existing_capacities)) / len(existing_capacities)) / 2
 
     # while criteria has not been met (we haven't exceeded time and solution hasn't improved in last x iterations):
     while current_time - start_time < args.time_limit*60*60 and continue_flag:
-        grid_outcome = compute_current_supply(current_grid.copy(), scenarios)
-        current_supply.append(grid_outcome['supply'])  # keeps the updated objective
+        # copy the current grid to a temporary solution
+        temporary_grid = current_grid.copy()
+        # "destroy" current solution: choose what to upgrade until the upgrades exceed budget constraints
+        upgrade(temporary_grid, current_grid_outcome['fail_count'], edges, args.budget)  # TODO: add weights for methods.
+        # "repair" the new grid: choose what to downgrade until the remaining upgrades are within the budget constrains
+        downgrade(temporary_grid, edges, args.budget)  # TODO: add weights for methods.
+        # evaluate the performance of the temporary grid
+        temporary_grid_outcome = compute_current_supply(temporary_grid, scenarios)
+        # check value of current solution using the cascade simulator
+        if temporary_grid_outcome <= current_supply[-1]:
+            # a better solution was found - update current incumbent TODO: insert a simulated annealing like behaviour
+            current_supply.append(temporary_grid_outcome['supply'])
+            current_grid = temporary_grid.copy()
+            current_grid_outcome = temporary_grid_outcome
 
         current_time = time.time()  # to manage time stopping criteria
-    # destroy the current solution by exceeding budget constraints
-    # repair solution by returning back to feasible budget
-    # check value of current solution using the cascade simulator
-    # if value is better (or "somewhat less" with a simulated annealing temperature parameter) than current incumbent
-    # modify the current_grid to the new one
 
     # write the current solution current_grid to a csv file
 
+
+# ****************************************************
+# ******* Downgrade and upgrade grid *****************
+# ****************************************************
+def compute_left_budget(power_grid, original_edges, budget):
+    """
+    Function to compute the remaining budget after grid upgrades
+    :param power_grid: Upgraded power grid to compute
+    :param original_edges: Edges in the original power grid (pre-upgrade)
+    :param budget: Total budget allocation
+    :return: The remaining budget to allocate (can be negative if upgrades exceed budget)
+    """
+    current_edges = [arrange_edge_minmax(edge[0], edge[1])
+                     for edge in power_grid.edges()]
+    upgrade_costs = sum(
+        [(power_grid.edges[cur_edge]['capacity'] - original_edges[('c',) + cur_edge]) * original_edges[
+            ('h',) + cur_edge]
+         for cur_edge in current_edges])
+    establishment_costs = sum(
+        [(power_grid.edges[cur_edge]['capacity'] > 0 and original_edges[('c',) + cur_edge] == 0) * original_edges[
+            ('H',) + cur_edge]
+         for cur_edge in current_edges])
+    left_budget = budget - upgrade_costs + establishment_costs
+    return left_budget
+
+
+def upgrade(power_grid, fail_count, original_edges, budget):
+    """
+    Upgrade a power grid until upgrades exceed the budget
+    :param power_grid: The power grid to upgrade
+    :param fail_count: Dictionary of fail count of every edge in the power grid (relating to scenarios)
+    :param original_edges: The edges and capacities in the original power grid
+    :param budget: Total budget for upgrades
+    :return: The amount of exceeding budget after upgrades (the function also updates power_grid)
+    """
+    left_budget = compute_left_budget(power_grid, original_edges, budget)
+    while left_budget > 0:
+        edge_to_upgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c'])
+        if edge_to_upgrade not in power_grid.edges():
+            power_grid.add_edge(edge_to_upgrade[0], edge_to_upgrade[1],
+                                capacity=upgrade_downgrade_step,
+                                susceptance=original_edges[('x',) + edge_to_upgrade])
+        else:
+            pass  # TODO: Add update of edge capacity using upgrade_downgrade_step
+
+
+
+def downgrade(power_grid, original_edges, budget):
+    pass
 
 # ****************************************************
 # ******* Reading and writing files ******************
@@ -162,7 +227,9 @@ def create_power_grid(nodes, edges):
     edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges if edge[0] == 'c']
     add_edges_1 = [(cur_edge[0], cur_edge[1], {
         'capacity': edges[('c',) + cur_edge],
-        'susceptance': edges[('x',) + cur_edge]})
+        'susceptance': edges[('x',) + cur_edge],
+        'establish_cost': edges[('H',) + cur_edge],
+        'upgrade_cost': edges[('h',) + cur_edge]})
                    for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0)]
     grid.add_edges_from(add_edges_1)
 
@@ -360,14 +427,18 @@ def compute_current_supply(power_grid, scenarios):
     # Extract list of edges
     edge_list = [edge for edge in power_grid.edges()]
     # Generate the supplied vector using cfe
-    failed_grids = {cur_scenario: cfe(power_grid, scenarios[cur_scenario]) for
+    failed_grids = {cur_scenario: cfe(power_grid.copy(), scenarios[cur_scenario]) for
                     cur_scenario in scenarios.keys() if cur_scenario[0] == 's'}
     supplied_per_scenario = [sum([failed_grids[cur_scenario]['updated_grid_copy'].nodes[cur_node]['demand']
                                   for cur_node in power_grid.nodes])*scenarios[('s_pr', cur_scenario[1])]
                              for cur_scenario in failed_grids.keys()]
-    # count the number of times each edge in edge_list failed (including initial failures)
-
-    result = {'supply': sum(supplied_per_scenario)}
+    # count the number of times each edge in edge_list failed (not including initial failures)
+    failed_edges = [failed_grids[('s', curr_scenario)]['F'][cascade_step+1]
+                    for curr_scenario in scenario_list
+                    for cascade_step in range(failed_grids[('s', curr_scenario)]['t'])]
+    flatten_failed_edges = [l for sublist in failed_edges for l in sublist]
+    failed_count = collections.Counter(flatten_failed_edges)
+    result = {'supply': sum(supplied_per_scenario), 'fail_count': failed_count}
     return result
 
 
