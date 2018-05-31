@@ -3,7 +3,7 @@
 library(tidyverse)
 library(stringr)
 
-scenarios.test.set <- "50 failure scenarios/"
+scenarios.test.set <- "50 failure scenarios with failure penalty 0.1/"
 res.files <- dir(paste0("c:/temp/grid_cascade_output/", scenarios.test.set), pattern = "*temp_sol.csv", full.names = T)
 
 loadres <- function(path){
@@ -130,6 +130,10 @@ if (scenarios.test.set == "50 failure scenarios/"){
          filename = "optimization_10_scenarios_1depth_full_comparison.eps",
          plot = compare.plot, width = 18, height = 10, units = "cm")
 } else if (scenarios.test.set == "50 failure scenarios with failure penalty 1/"){
+  ggsave(path = "C:\\Users\\Adi Sarid\\Documents\\GitHub\\Draft-design-robustness\\figures\\",
+         filename = "optimization_50_scenarios_1depth_full_comparison_with_penalty.eps",
+         plot = compare.plot, width = 18, height = 10, units = "cm")
+} else if (scenarios.test.set == "50 failure scenarios with failure penalty 0.1/"){
   ggsave(path = "C:\\Users\\Adi Sarid\\Documents\\GitHub\\Draft-design-robustness\\figures\\",
          filename = "optimization_50_scenarios_1depth_full_comparison_with_penalty.eps",
          plot = compare.plot, width = 18, height = 10, units = "cm")
