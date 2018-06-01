@@ -46,6 +46,8 @@ args = parser.parse_args()
 # **************** Globals ***************************
 # ****************************************************
 instance_location = os.getcwd() + '\\' + args.instance_location + '\\'
+global budget  # used to define the budget constraint's RHS
+budget = args.budget
 
 
 # ****************************************************
@@ -61,6 +63,9 @@ def main_program():
     scenarios = read_scenarios(instance_location + 'scenario_failures.csv',
                                instance_location + 'scenario_probabilities.csv')
 
+    # compute the total demand in the grid
+    total_demand = sum([nodes[node_key] for node_key in nodes.keys() if node_key[0] == 'd'])
+
     # build a basic networkx object which will be used to hold the solution, and serve as an initial solution
     current_grid = create_power_grid(nodes, edges)
     current_grid_outcome = compute_current_supply(current_grid.copy(), scenarios)
@@ -69,35 +74,53 @@ def main_program():
 
     # select upgrade/downgrade quants - mean of existing edge's capacity divided by 2 # TODO: something smarter
     existing_capacities = [edges[cur_edge] for cur_edge in edges.keys() if cur_edge[0] == 'c' and edges[cur_edge] > 0]
-    global upgrade_downgrade_step
+    global upgrade_downgrade_step  # user for defining the upgrade/downgrade steps
     upgrade_downgrade_step = (float(sum(existing_capacities)) / len(existing_capacities)) / 2
 
+    # compute the remaining budget after th initial solution has been determined
+    left_budget = compute_left_budget(current_grid.copy(), edges)  # for now, this should equal budget,
+    # until a better initial solution is devised
+
+    loop_counter = 0  # used to count the number of iterations
+    num_improvements = 0  # number of times the algorithm fount a better incumbent
     # while criteria has not been met (we haven't exceeded time and solution hasn't improved in last x iterations):
     while current_time - start_time < args.time_limit*60*60 and continue_flag:
         # copy the current grid to a temporary solution
         temporary_grid = current_grid.copy()
         # "destroy" current solution: choose what to upgrade until the upgrades exceed budget constraints
-        upgrade(temporary_grid, current_grid_outcome['fail_count'], edges, args.budget)  # TODO: add weights for methods.
+        left_budget = upgrade(temporary_grid, current_grid_outcome['fail_count'], edges, left_budget)
+        # TODO: add weights for methods.
         # "repair" the new grid: choose what to downgrade until the remaining upgrades are within the budget constrains
-        downgrade(temporary_grid, edges, args.budget)  # TODO: add weights for methods.
+        left_budget = downgrade(temporary_grid, edges, left_budget)  # TODO: add weights for methods.
         # evaluate the performance of the temporary grid
         temporary_grid_outcome = compute_current_supply(temporary_grid, scenarios)
         # check value of current solution using the cascade simulator
-        if temporary_grid_outcome <= current_supply[-1]:
+        if temporary_grid_outcome['supply'] > current_supply[-1]:
             # a better solution was found - update current incumbent TODO: insert a simulated annealing like behaviour
             current_supply.append(temporary_grid_outcome['supply'])
             current_grid = temporary_grid.copy()
             current_grid_outcome = temporary_grid_outcome
-
+            num_improvements += 1
+        # TODO: do something with continue flag
+        # TODO: add time counter
+        loop_counter += 1
         current_time = time.time()  # to manage time stopping criteria
-
+        if not (loop_counter % 1):
+            elapsed_time = (current_time-start_time)/60
+            print "\r>> Elapsed:", int(elapsed_time)/60, "hours,", int(elapsed_time % 60), "min",\
+                round(elapsed_time * 60.0 % 60),  " sec. ", \
+                "Total rounds", loop_counter,\
+                ", improved", num_improvements, "times (", round(float(num_improvements)/loop_counter*100), "\b%).",\
+                "Obj.:", current_supply[-1],\
+                "Gap:", round(current_supply[-1]/total_demand*100), "\b%",
+            sys.stdout.flush()
     # write the current solution current_grid to a csv file
 
 
 # ****************************************************
 # ******* Downgrade and upgrade grid *****************
 # ****************************************************
-def compute_left_budget(power_grid, original_edges, budget):
+def compute_left_budget(power_grid, original_edges):
     """
     Function to compute the remaining budget after grid upgrades
     :param power_grid: Upgraded power grid to compute
@@ -119,29 +142,50 @@ def compute_left_budget(power_grid, original_edges, budget):
     return left_budget
 
 
-def upgrade(power_grid, fail_count, original_edges, budget):
+def upgrade(power_grid, fail_count, original_edges, left_budget):
     """
     Upgrade a power grid until upgrades exceed the budget
     :param power_grid: The power grid to upgrade
     :param fail_count: Dictionary of fail count of every edge in the power grid (relating to scenarios)
     :param original_edges: The edges and capacities in the original power grid
-    :param budget: Total budget for upgrades
+    :param left_budget: remaining budget for upgrades (should be positive)
     :return: The amount of exceeding budget after upgrades (the function also updates power_grid)
     """
-    left_budget = compute_left_budget(power_grid, original_edges, budget)
     while left_budget > 0:
         edge_to_upgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c'])
-        if edge_to_upgrade not in power_grid.edges():
+        if not power_grid.has_edge(edge_to_upgrade[0], edge_to_upgrade[1]):
+            # edge does not exist, establish it by adding upgrade_downgrade_step
             power_grid.add_edge(edge_to_upgrade[0], edge_to_upgrade[1],
                                 capacity=upgrade_downgrade_step,
                                 susceptance=original_edges[('x',) + edge_to_upgrade])
-        else:
-            pass  # TODO: Add update of edge capacity using upgrade_downgrade_step
+            left_budget = left_budget - original_edges[('H',) + edge_to_upgrade] + \
+                          original_edges[('h',) + edge_to_upgrade]*upgrade_downgrade_step
+        else:  # edge exists, do an upgrade
+            power_grid.edges[edge_to_upgrade]['capacity'] += upgrade_downgrade_step
+            left_budget = left_budget - original_edges[('h',) + edge_to_upgrade] * upgrade_downgrade_step
+    return left_budget
 
 
-
-def downgrade(power_grid, original_edges, budget):
-    pass
+def downgrade(power_grid, original_edges, left_budget):
+    """
+    The inverse function to upgrade, it randomly chooses what edges to downgrade until
+    the solution becomes feasible again (not exceeding budget)
+    :param power_grid: The power grid to upgrade
+    :param original_edges: The edges and capacities in the original power grid
+    :param left_budget: remaining budget for upgrades (should be negative)
+    :return: The amount of exceeding budget after upgrades (the function also updates power_grid)
+    """
+    while left_budget < 0:
+        edge_to_downgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c' and
+                                           power_grid.has_edge(edge[1], edge[2]) and
+                                           original_edges[edge] < power_grid.edges[(edge[1], edge[2])]['capacity']])
+        power_grid.edges[edge_to_downgrade]['capacity'] -= upgrade_downgrade_step
+        left_budget += original_edges[('h',) + edge_to_downgrade]*upgrade_downgrade_step
+        if power_grid.edges[edge_to_downgrade]['capacity'] <= 0:
+            # if this edge should not exist - remove it and add back establishment cost
+            left_budget += original_edges[('H',) + edge_to_downgrade]
+            power_grid.remove_edge(edge_to_downgrade[0], edge_to_downgrade[1])
+    return left_budget
 
 # ****************************************************
 # ******* Reading and writing files ******************
