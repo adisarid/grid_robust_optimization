@@ -108,11 +108,11 @@ def main_program():
         if not (loop_counter % 1):
             elapsed_time = (current_time-start_time)/60
             print "\r>> Elapsed:", int(elapsed_time)/60, "hours,", int(elapsed_time % 60), "min",\
-                round(elapsed_time * 60.0 % 60),  " sec. ", \
+                round(elapsed_time * 60.0 % 60),  "sec. ", \
                 "Total rounds", loop_counter,\
-                ", improved", num_improvements, "times (", round(float(num_improvements)/loop_counter*100), "\b%).",\
+                "improved", num_improvements, "times", "("+ str(round(float(num_improvements)/loop_counter*100)), "\b%).",\
                 "Obj.:", current_supply[-1],\
-                "Gap:", round(current_supply[-1]/total_demand*100), "\b%",
+                "Gap:", 100-round(current_supply[-1]/total_demand*100), "\b%",
             sys.stdout.flush()
     # write the current solution current_grid to a csv file
 
