@@ -37,6 +37,12 @@ parser.add_argument('--budget', help="Budget constraint for optimization problem
 parser.add_argument('--export_results_file', help="Location of solution output file "
                                                   "(default c:/temp/grid_robust_opt/heuristic_results.csv)",
                     type=str, default="c:/temp/grid_robust_opt/heuristic_results.csv")
+parser.add_argument('--opt_gap', help="Gap from full demand [default is 0.01=1%]",
+                    type=float, default=0.01)
+parser.add_argument('--improvement_ratio',
+                    help="Bound on improvement ratio (portion of improving solution out of total iterations) - "
+                         "Stop program when ratio goes under specified bound [default is 0.001=0.1%]",
+                    type=float, default=0.001)
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -110,10 +116,16 @@ def main_program():
             print "\r>> Elapsed:", int(elapsed_time)/60, "hours,", int(elapsed_time % 60), "min",\
                 round(elapsed_time * 60.0 % 60),  "sec. ", \
                 "Total rounds", loop_counter,\
-                "improved", num_improvements, "times", "("+ str(round(float(num_improvements)/loop_counter*100)), "\b%).",\
+                "improved", num_improvements, "times", \
+                "(" + str(round(float(num_improvements)/loop_counter*100)), "\b%).",\
                 "Obj.:", current_supply[-1],\
                 "Gap:", 100-round(current_supply[-1]/total_demand*100), "\b%",
             sys.stdout.flush()
+        if args.opt_gap >= current_supply[-1]/total_demand:
+            continue_flag = False
+        if args.improvement_ratio >= float(num_improvements)/loop_counter:
+            continue_flag = False
+
     # write the current solution current_grid to a csv file
 
 
@@ -151,6 +163,8 @@ def upgrade(power_grid, fail_count, original_edges, left_budget):
     :param left_budget: remaining budget for upgrades (should be positive)
     :return: The amount of exceeding budget after upgrades (the function also updates power_grid)
     """
+    # TODO: Add an adaptive way to decide on the upgrade's capacity step
+    # TODO: Add an adaptive way to decide on upgrading an edge versus adding a new edge
     while left_budget > 0:
         edge_to_upgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c'])
         if not power_grid.has_edge(edge_to_upgrade[0], edge_to_upgrade[1]):
@@ -175,13 +189,17 @@ def downgrade(power_grid, original_edges, left_budget):
     :param left_budget: remaining budget for upgrades (should be negative)
     :return: The amount of exceeding budget after upgrades (the function also updates power_grid)
     """
+    # TODO: Add an adaptive way to decide on a small downgrade versus edge elimination
     while left_budget < 0:
         edge_to_downgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c' and
                                            power_grid.has_edge(edge[1], edge[2]) and
                                            original_edges[edge] < power_grid.edges[(edge[1], edge[2])]['capacity']])
-        power_grid.edges[edge_to_downgrade]['capacity'] -= upgrade_downgrade_step
-        left_budget += original_edges[('h',) + edge_to_downgrade]*upgrade_downgrade_step
-        if power_grid.edges[edge_to_downgrade]['capacity'] <= 0:
+        # compute the capacity to remove (cannot exceed the line's capacity)
+        # currently the step is constant so this not needed, but later on will be important
+        remove_capacity = min(upgrade_downgrade_step, power_grid.edges[edge_to_downgrade]['capacity'])
+        power_grid.edges[edge_to_downgrade]['capacity'] -= remove_capacity
+        left_budget += original_edges[('h',) + edge_to_downgrade] * remove_capacity
+        if power_grid.edges[edge_to_downgrade]['capacity'] == 0:
             # if this edge should not exist - remove it and add back establishment cost
             left_budget += original_edges[('H',) + edge_to_downgrade]
             power_grid.remove_edge(edge_to_downgrade[0], edge_to_downgrade[1])
