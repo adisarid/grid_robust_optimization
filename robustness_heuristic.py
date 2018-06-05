@@ -35,9 +35,15 @@ parser.add_argument('--time_limit', help="Set a time limit (stopping criteria), 
                     type=float, default=1)
 parser.add_argument('--budget', help="Budget constraint for optimization problem [default 100]",
                     type=float, default=100.0)
-parser.add_argument('--export_results_file', help="Location of solution output file "
-                                                  "(default c:/temp/grid_robust_opt/heuristic_results.csv)",
-                    type=str, default="c:/temp/grid_robust_opt/heuristic_results.csv")
+parser.add_argument('--export_results_tracking', help="Location of solution output file "
+                                                      "(default c:/temp/grid_cascade_output/heuristic_results.csv)"
+                                                      "To suppress set as False",
+                    type=str, default="c:/temp/grid_cascade_output/heuristic_results.csv")
+parser.add_argument('--export_final_grid', help="Location to which the final power grid will be saved, as a gpickle"
+                                                "(default c:/temp/grid_cascade_output/"
+                                                "YYYY-MM-DD-hh-mm_heuristic_sol_*instance*.gpickle"
+                                                "Set as False to skip saving",
+                    type=str, default="timestamped")
 parser.add_argument('--opt_gap', help="Gap from full demand [default 0.01=1%%]",
                     type=float, default=0.01)
 parser.add_argument('--improvement_ratio',
@@ -68,6 +74,28 @@ global full_destruct_probability  # the probability for full destruction of an e
 full_destruct_probability = args.full_destruct_probability
 global upgrade_selection_bias
 upgrade_selection_bias = args.upgrade_selection_bias
+
+
+# ****************************************************
+# ****** Append solution statistics file *************
+# ****************************************************
+# if file does not exist open the file and write the header
+global writer
+global tracking_file
+file_exists = False
+if not os.path.isfile(args.export_results_tracking):
+    file_exists = True
+if args.export_results_tracking != "False":
+    tracking_file = open(args.export_results_tracking, 'ab')
+    writer = csv.writer(tracking_file)
+    if not file_exists:
+        writer.writerow([
+            "time_stamp_str", "current_time",
+            "args.instance_location", "budget",
+            "full_destruct_probability", "upgrade_selection_bias",
+            "left_budget", "loop_counter", "num_improvements",
+            "current_supply", "total_demand"
+        ])
 
 
 # ****************************************************
@@ -121,6 +149,18 @@ def main_program():
             current_grid = temporary_grid.copy()
             current_grid_outcome = temporary_grid_outcome
             num_improvements += 1
+            if args.export_results_tracking != "False":
+                time_stamp = time.gmtime(current_time)
+                time_stamp_str = str(time_stamp[0]) + '-' + str(time_stamp[1]).zfill(2) + '-' +\
+                                 str(time_stamp[2]).zfill(2) + '-' + str(time_stamp[3]).zfill(2) + '-' + \
+                                 str(time_stamp[4]).zfill(2) + '-' +\
+                                 str(time_stamp[5]).zfill(2)
+                line_to_write = [time_stamp_str, current_time,
+                                 args.instance_location, args.budget,
+                                 full_destruct_probability, upgrade_selection_bias,
+                                 left_budget, loop_counter, num_improvements,
+                                 current_supply[-1], total_demand]
+                writer.writerow(line_to_write)
         # TODO: do something with continue flag
         # TODO: add time counter
         loop_counter += 1
@@ -139,8 +179,21 @@ def main_program():
             continue_flag = False
         if args.improvement_ratio >= float(num_improvements)/loop_counter:
             continue_flag = False
-
-    # write the current solution current_grid to a csv file
+    # write the current solution current_grid to a gpickle file
+    if args.export_final_grid != "False":
+        if args.export_final_grid == "timestamped":
+            time_stamp = time.gmtime(current_time)
+            filename = "c:/temp/grid_cascade_output/" + str(time_stamp[0]) + '-' + str(time_stamp[1]).zfill(2) + \
+                       '-' + str(time_stamp[2]).zfill(2) + '-' + str(time_stamp[3]).zfill(2) + '-' + \
+                       str(time_stamp[4]).zfill(2) + '-' + \
+                       str(time_stamp[5]).zfill(2) + ' - ' + args.instance_location + 'heuristic_sol.gpickle'
+        else:
+            filename = args.export_final_grid
+        nx.write_gpickle(current_grid, filename)
+    # close the tracking file
+    if args.export_results_tracking != "False":
+        tracking_file.close()
+    print "Program complete."
 
 
 # ****************************************************
@@ -151,7 +204,6 @@ def compute_left_budget(power_grid, original_edges):
     Function to compute the remaining budget after grid upgrades
     :param power_grid: Upgraded power grid to compute
     :param original_edges: Edges in the original power grid (pre-upgrade)
-    :param budget: Total budget allocation
     :return: The remaining budget to allocate (can be negative if upgrades exceed budget)
     """
     current_edges = [arrange_edge_minmax(edge[0], edge[1])
