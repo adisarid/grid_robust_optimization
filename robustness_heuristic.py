@@ -21,6 +21,7 @@ import networkx as nx
 import time
 import collections
 import random
+import numpy
 
 
 # ************************************************
@@ -30,19 +31,28 @@ import argparse
 parser = argparse.ArgumentParser(description="Run a Power Grid Robust Optimization with an ALNS heuristic operation.")
 parser.add_argument('--instance_location', help="Provide the location for instance files (directory name)",
                     type=str, default="instance24")
-parser.add_argument('--time_limit', help="Set a time limit (stopping criteria), in hours (default is 1 hour)",
+parser.add_argument('--time_limit', help="Set a time limit (stopping criteria), in hours [default 1 hour]",
                     type=float, default=1)
-parser.add_argument('--budget', help="Budget constraint for optimization problem (default is 100)",
+parser.add_argument('--budget', help="Budget constraint for optimization problem [default 100]",
                     type=float, default=100.0)
 parser.add_argument('--export_results_file', help="Location of solution output file "
                                                   "(default c:/temp/grid_robust_opt/heuristic_results.csv)",
                     type=str, default="c:/temp/grid_robust_opt/heuristic_results.csv")
-parser.add_argument('--opt_gap', help="Gap from full demand [default is 0.01=1%]",
+parser.add_argument('--opt_gap', help="Gap from full demand [default 0.01=1%%]",
                     type=float, default=0.01)
 parser.add_argument('--improvement_ratio',
                     help="Bound on improvement ratio (portion of improving solution out of total iterations) - "
-                         "Stop program when ratio goes under specified bound [default is 0.001=0.1%]",
+                         "Stop program when ratio goes under specified bound [default 0.001=0.1%%]",
                     type=float, default=0.001)
+parser.add_argument('--full_destruct_probability',
+                    help="Probability at which an edge will be fully destructed during the downgrade operations "
+                         "[default 0.1=10%%]",
+                    type=float, default=0.1)
+parser.add_argument('--upgrade_selection_bias',
+                    help="The probability for upgrade selection bias - Percent of cases in which the upgrade is "
+                         "determined by edges which mostly failed, versus a completely random selection of edges"
+                         "[default 0.5=50%%]",
+                    type=float, default=0.5)
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -54,6 +64,10 @@ args = parser.parse_args()
 instance_location = os.getcwd() + '\\' + args.instance_location + '\\'
 global budget  # used to define the budget constraint's RHS
 budget = args.budget
+global full_destruct_probability  # the probability for full destruction of an edge
+full_destruct_probability = args.full_destruct_probability
+global upgrade_selection_bias
+upgrade_selection_bias = args.upgrade_selection_bias
 
 
 # ****************************************************
@@ -114,12 +128,12 @@ def main_program():
         if not (loop_counter % 1):
             elapsed_time = (current_time-start_time)/60
             print "\r>> Elapsed:", int(elapsed_time)/60, "hours,", int(elapsed_time % 60), "min",\
-                round(elapsed_time * 60.0 % 60),  "sec. ", \
+                round(elapsed_time * 60.0 % 60, 1),  "sec. ", \
                 "Total rounds", loop_counter,\
-                "improved", num_improvements, "times", \
-                "(" + str(round(float(num_improvements)/loop_counter*100)), "\b%).",\
-                "Obj.:", current_supply[-1],\
-                "Gap:", 100-round(current_supply[-1]/total_demand*100), "\b%",
+                "improved", num_improvements, "time(s)", \
+                "(" + str(round(float(num_improvements)/loop_counter*100, 1)), "\b%).",\
+                "Obj.:", current_supply[-1], 'of total demand', '(' + str(total_demand) + ')',\
+                "Gap:", 100-round(current_supply[-1]/total_demand*100, 1), "\b%",
             sys.stdout.flush()
         if args.opt_gap >= current_supply[-1]/total_demand:
             continue_flag = False
@@ -166,7 +180,16 @@ def upgrade(power_grid, fail_count, original_edges, left_budget):
     # TODO: Add an adaptive way to decide on the upgrade's capacity step
     # TODO: Add an adaptive way to decide on upgrading an edge versus adding a new edge
     while left_budget > 0:
-        edge_to_upgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c'])
+        selected_operation = random.uniform(0, 1)  # used to randomly select the upgrade method
+        if selected_operation <= upgrade_selection_bias:  # upgrade an edge according to failure counts
+            existing_edges = fail_count.keys()
+            tot_fails = sum([fail_count[cur_edge] for cur_edge in existing_edges])
+            edge_selection_probability = [float(fail_count[cur_edge])/tot_fails for cur_edge in existing_edges]
+            edge_to_upgrade = existing_edges[
+                numpy.random.choice(range(len(existing_edges)), 1, edge_selection_probability)[0]
+            ]
+        else:  # upgrade a regular edge without applying selection bias
+            edge_to_upgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c'])
         if not power_grid.has_edge(edge_to_upgrade[0], edge_to_upgrade[1]):
             # edge does not exist, establish it by adding upgrade_downgrade_step
             power_grid.add_edge(edge_to_upgrade[0], edge_to_upgrade[1],
@@ -191,12 +214,24 @@ def downgrade(power_grid, original_edges, left_budget):
     """
     # TODO: Add an adaptive way to decide on a small downgrade versus edge elimination
     while left_budget < 0:
-        edge_to_downgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c' and
-                                           power_grid.has_edge(edge[1], edge[2]) and
-                                           original_edges[edge] < power_grid.edges[(edge[1], edge[2])]['capacity']])
-        # compute the capacity to remove (cannot exceed the line's capacity)
-        # currently the step is constant so this not needed, but later on will be important
-        remove_capacity = min(upgrade_downgrade_step, power_grid.edges[edge_to_downgrade]['capacity'])
+        selected_operation = random.uniform(0, 1)  # used to randomly select the downgrade method
+        new_edges = [(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c' and
+                     power_grid.has_edge(edge[1], edge[2]) and
+                     original_edges[edge] == 0]
+        if selected_operation < full_destruct_probability and new_edges != []:
+            # select a new edge and completely destruct it
+            edge_to_downgrade = random.choice(new_edges)
+            # compute the capacity to remove (cannot exceed the line's capacity)
+            # currently the step is constant so this not needed, but later on will be important
+            remove_capacity = power_grid.edges[edge_to_downgrade]['capacity']  # remove entire capacity
+        else:  # don't destruct, just make minor changes to edges (may destruct if small capacity exists)
+            edge_to_downgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c' and
+                                               power_grid.has_edge(edge[1], edge[2]) and
+                                               original_edges[edge] < power_grid.edges[(edge[1], edge[2])]['capacity']])
+            # compute the capacity to remove (cannot exceed the line's capacity)
+            # currently the step is constant so this not needed, but later on will be important
+            remove_capacity = min(upgrade_downgrade_step, power_grid.edges[edge_to_downgrade]['capacity'])
+        # do the actual modification to the power grid networkx object
         power_grid.edges[edge_to_downgrade]['capacity'] -= remove_capacity
         left_budget += original_edges[('h',) + edge_to_downgrade] * remove_capacity
         if power_grid.edges[edge_to_downgrade]['capacity'] == 0:
