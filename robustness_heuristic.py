@@ -172,7 +172,7 @@ def main_program():
                 "Obj.:", current_supply[-1], 'of total demand', '(' + str(total_demand) + ')',\
                 "Gap:", 100-round(current_supply[-1]/total_demand*100, 1), "\b%",
             sys.stdout.flush()
-        if args.opt_gap >= current_supply[-1]/total_demand:
+        if args.opt_gap >= 1-current_supply[-1]/total_demand:
             continue_flag = False
         if args.improvement_ratio >= float(num_improvements)/loop_counter:
             continue_flag = False
