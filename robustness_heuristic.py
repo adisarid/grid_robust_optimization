@@ -174,7 +174,7 @@ def main_program():
             sys.stdout.flush()
         if args.opt_gap >= 1-current_supply[-1]/total_demand:
             continue_flag = False
-        if args.improvement_ratio >= float(num_improvements)/loop_counter:
+        if args.improvement_ratio >= float(num_improvements)/loop_counter and loop_counter >= 50:
             continue_flag = False
     # write the current solution current_grid to a gpickle file
     if args.export_final_grid != "False":
