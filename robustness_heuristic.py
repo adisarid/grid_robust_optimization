@@ -80,15 +80,9 @@ upgrade_selection_bias = args.upgrade_selection_bias
 # ****** Append solution statistics file *************
 # ****************************************************
 # if file does not exist open the file and write the header
-global writer
-global tracking_file
-file_exists = False
 if not os.path.isfile(args.export_results_tracking):
-    file_exists = True
-if args.export_results_tracking != "False":
-    tracking_file = open(args.export_results_tracking, 'ab')
-    writer = csv.writer(tracking_file)
-    if not file_exists:
+    with open(args.export_results_tracking, 'ab') as tracking_file:
+        writer = csv.writer(tracking_file)
         writer.writerow([
             "time_stamp_str", "current_time",
             "args.instance_location", "budget",
@@ -144,6 +138,7 @@ def main_program():
         temporary_grid_outcome = compute_current_supply(temporary_grid, scenarios)
         # check value of current solution using the cascade simulator
         if temporary_grid_outcome['supply'] > current_supply[-1]:
+            last_optimal_sol_time = time.time()
             # a better solution was found - update current incumbent TODO: insert a simulated annealing like behaviour
             current_supply.append(temporary_grid_outcome['supply'])
             current_grid = temporary_grid.copy()
@@ -160,7 +155,9 @@ def main_program():
                                  full_destruct_probability, upgrade_selection_bias,
                                  left_budget, loop_counter, num_improvements,
                                  current_supply[-1], total_demand]
-                writer.writerow(line_to_write)
+                with open(args.export_results_tracking, 'ab') as tracking_file:
+                    writer = csv.writer(tracking_file)
+                    writer.writerow(line_to_write)
         # TODO: do something with continue flag
         # TODO: add time counter
         loop_counter += 1
@@ -181,8 +178,8 @@ def main_program():
             continue_flag = False
     # write the current solution current_grid to a gpickle file
     if args.export_final_grid != "False":
-        if args.export_final_grid == "timestamped":
-            time_stamp = time.gmtime(current_time)
+        if args.export_final_grid == "timestamped" and 'last_optimal_sol_time' in locals():
+            time_stamp = time.gmtime(last_optimal_sol_time)
             filename = "c:/temp/grid_cascade_output/" + str(time_stamp[0]) + '-' + str(time_stamp[1]).zfill(2) + \
                        '-' + str(time_stamp[2]).zfill(2) + '-' + str(time_stamp[3]).zfill(2) + '-' + \
                        str(time_stamp[4]).zfill(2) + '-' + \
@@ -190,9 +187,6 @@ def main_program():
         else:
             filename = args.export_final_grid
         nx.write_gpickle(current_grid, filename)
-    # close the tracking file
-    if args.export_results_tracking != "False":
-        tracking_file.close()
     print "Program complete."
 
 
@@ -576,6 +570,7 @@ def compute_current_supply(power_grid, scenarios):
     # Extract list of edges
     edge_list = [edge for edge in power_grid.edges()]
     # Generate the supplied vector using cfe
+    # Todo: consider turning cfe into a onetime function which already considers all scenarios (instead of per scenario)
     failed_grids = {cur_scenario: cfe(power_grid.copy(), scenarios[cur_scenario]) for
                     cur_scenario in scenarios.keys() if cur_scenario[0] == 's'}
     supplied_per_scenario = [sum([failed_grids[cur_scenario]['updated_grid_copy'].nodes[cur_node]['demand']
