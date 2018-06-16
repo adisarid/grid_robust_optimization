@@ -117,7 +117,7 @@ def main_program():
     # select upgrade/downgrade quants - mean of existing edge's capacity divided by 2 # TODO: something smarter
     existing_capacities = [edges[cur_edge] for cur_edge in edges.keys() if cur_edge[0] == 'c' and edges[cur_edge] > 0]
     global upgrade_downgrade_step  # user for defining the upgrade/downgrade steps
-    upgrade_downgrade_step = (float(sum(existing_capacities)) / len(existing_capacities)) / 2
+    upgrade_downgrade_step = (float(sum(existing_capacities)) / len(existing_capacities)) / 5
 
     # compute the remaining budget after th initial solution has been determined
     left_budget = compute_left_budget(current_grid.copy(), edges)  # for now, this should equal budget,
@@ -241,7 +241,7 @@ def upgrade(power_grid, fail_count, original_edges, left_budget):
             power_grid.add_edge(edge_to_upgrade[0], edge_to_upgrade[1],
                                 capacity=upgrade_downgrade_step,
                                 susceptance=original_edges[('x',) + edge_to_upgrade])
-            left_budget = left_budget - original_edges[('H',) + edge_to_upgrade] + \
+            left_budget = left_budget - original_edges[('H',) + edge_to_upgrade] - \
                           original_edges[('h',) + edge_to_upgrade]*upgrade_downgrade_step
         else:  # edge exists, do an upgrade
             power_grid.edges[edge_to_upgrade]['capacity'] += upgrade_downgrade_step
