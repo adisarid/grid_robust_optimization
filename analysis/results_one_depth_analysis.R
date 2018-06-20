@@ -3,7 +3,7 @@
 library(tidyverse)
 library(stringr)
 
-scenarios.test.set <- "50 failure scenarios with failure penalty 0.1/"
+scenarios.test.set <- "50 failure scenarios/"
 res.files <- dir(paste0("c:/temp/grid_cascade_output/", scenarios.test.set), pattern = "*temp_sol.csv", full.names = T)
 
 loadres <- function(path){
@@ -34,7 +34,7 @@ full.res.w.prc <- full.res %>%
 
 ggplot(full.res.w.prc, aes(x = budget, y = percent.objective, color = instance)) + 
   geom_point() + geom_line() + scale_x_continuous(breaks = c(5, 10, 15, 25, 50, 100, 150, 200)) +
-  coord_cartesian(ylim = c(0.9,1)) + 
+  #coord_cartesian(ylim = c(0.9,1)) + 
   scale_y_continuous(labels = scales::percent) + 
   ggtitle("Comparison of 1depth approx objective by budget, aggregated\nPortion of maximal value")
 
