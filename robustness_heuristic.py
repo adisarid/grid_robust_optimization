@@ -68,8 +68,8 @@ parser.add_argument('--min_neighborhoods_total',
                     help="The minimal number of neighborhoods to search at, before deciding to stop the search."
                          "Search is stopped if MIN_NEIGHBORHOODS_TOTAL neighborhoods were searched, and"
                          "overall improvement ratio is under OVERALL_IMPROVEMENT_RATIO_THRESHOLD."
-                         "[default for minimum 10 neighborhoods]",
-                    type=float, default=10)
+                         "[default for minimum 25 neighborhoods]",
+                    type=float, default=25)
 parser.add_argument('--overall_improvement_ratio_threshold',
                     help="If overall improvement ratio (number of incumbent found out of total solutions searched)"
                          "decreases under OVERALL_IMPROVEMENT_RATIO_THRESHOLD, and at least MIN_NEIGHBORHOODS_TOTAL"
