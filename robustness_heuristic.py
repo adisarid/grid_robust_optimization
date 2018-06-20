@@ -1,8 +1,9 @@
 # ------------------------------------------------------------------------------
-# Name:        Robust Optimization using an ALNS heuristic
+# Name:        Robust Optimization using an LNS heuristic
 # Purpose:     Find optimal planning to minimize loss of load
-#              Based on Adaptive Large Neighborhood Search (ALNS) heuristic
+#              Based on Large Neighborhood Search (LNS) heuristic
 #              For edges exceeding their capacity
+#              See Pisinger and Ropke, Large Neighborhood Search in Handbook of Metaheuristics
 #
 # Author:      Adi Sarid
 #
@@ -46,10 +47,10 @@ parser.add_argument('--export_final_grid', help="Location to which the final pow
                     type=str, default="timestamped")
 parser.add_argument('--opt_gap', help="Gap from full demand [default 0.01=1%%]",
                     type=float, default=0.01)
-parser.add_argument('--improvement_ratio',
-                    help="Bound on improvement ratio (portion of improving solution out of total iterations) - "
-                         "Stop program when ratio goes under specified bound [default 0.001=0.1%%]",
-                    type=float, default=0.001)
+parser.add_argument('--local_improvement_ratio',
+                    help="Bound on improvement ratio (portion of improving solution out of neighborhood iterations) - "
+                         "Jump to a different neighborhood when ratio goes under specified bound [default 0.05=5%%]",
+                    type=float, default=0.05)
 parser.add_argument('--full_destruct_probability',
                     help="Probability at which an edge will be fully destructed during the downgrade operations "
                          "[default 0.1=10%%]",
@@ -59,6 +60,22 @@ parser.add_argument('--upgrade_selection_bias',
                          "determined by edges which mostly failed, versus a completely random selection of edges"
                          "[default 0.5=50%%]",
                     type=float, default=0.5)
+parser.add_argument('--min_neighbors',
+                    help="The minimum number of iterations before jumping to a new neighborhood,"
+                         "(even if the improvement ratio is under the threshold) [default 25]",
+                    type=float, default=25)
+parser.add_argument('--min_neighborhoods_total',
+                    help="The minimal number of neighborhoods to search at, before deciding to stop the search."
+                         "Search is stopped if MIN_NEIGHBORHOODS_TOTAL neighborhoods were searched, and"
+                         "overall improvement ratio is under OVERALL_IMPROVEMENT_RATIO_THRESHOLD."
+                         "[default for minimum 10 neighborhoods]",
+                    type=float, default=10)
+parser.add_argument('--overall_improvement_ratio_threshold',
+                    help="If overall improvement ratio (number of incumbent found out of total solutions searched)"
+                         "decreases under OVERALL_IMPROVEMENT_RATIO_THRESHOLD, and at least MIN_NEIGHBORHOODS_TOTAL"
+                         "were searched, then a search criteria is met, and the search is stopped."
+                         "The overall improvement ratio threshold's default [default 0.01 = 1%%]",
+                    type=float, default=0.01)
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -88,7 +105,9 @@ if not os.path.isfile(args.export_results_tracking):
             "args.instance_location", "budget",
             "full_destruct_probability", "upgrade_selection_bias",
             "left_budget", "loop_counter", "num_improvements",
-            "current_supply", "total_demand"
+            "current_supply", "total_demand",
+            "neighborhoods_searched", "min_neighbors_per_neighborhood", "current_incumbent",
+            "min_neighborhoods", "local_improvement_ratio", "overall_improvement_ratio"
         ])
 
 
@@ -124,11 +143,18 @@ def main_program():
     # until a better initial solution is devised
 
     loop_counter = 0  # used to count the number of iterations
-    num_improvements = 0  # number of times the algorithm fount a better incumbent
+    loops_local = 0  # number of loops in current area
+    local_area_jumps = 0  # number of times the algorithm jumps to a new search area
+    num_improvements = 0  # number of times the algorithm found a better incumbent
+    num_improvements_local = 0  # number of time the algorithm found a better incumbent, in current search area
+
+    # copy the current grid to a temporary solution
+    temporary_grid = current_grid.copy()
+    original_grid = current_grid.copy()
+    current_incumbent = True  # The initial solution is also the incumbent solution
+
     # while criteria has not been met (we haven't exceeded time and solution hasn't improved in last x iterations):
     while current_time - start_time < args.time_limit*60*60 and continue_flag:
-        # copy the current grid to a temporary solution
-        temporary_grid = current_grid.copy()
         # "destroy" current solution: choose what to upgrade until the upgrades exceed budget constraints
         left_budget = upgrade(temporary_grid, current_grid_outcome['fail_count'], edges, left_budget)
         # TODO: add weights for methods.
@@ -137,45 +163,70 @@ def main_program():
         # evaluate the performance of the temporary grid
         temporary_grid_outcome = compute_current_supply(temporary_grid, scenarios)
         # check value of current solution using the cascade simulator
-        if temporary_grid_outcome['supply'] > current_supply[-1]:
+        if temporary_grid_outcome['supply'] > current_supply[-1] or loop_counter == 0:
             last_optimal_sol_time = time.time()
             # a better solution was found - update current incumbent TODO: insert a simulated annealing like behaviour
             current_supply.append(temporary_grid_outcome['supply'])
             current_grid = temporary_grid.copy()
             current_grid_outcome = temporary_grid_outcome
             num_improvements += 1
-            if args.export_results_tracking != "False":
-                time_stamp = time.gmtime(current_time)
-                time_stamp_str = str(time_stamp[0]) + '-' + str(time_stamp[1]).zfill(2) + '-' +\
-                                 str(time_stamp[2]).zfill(2) + '-' + str(time_stamp[3]).zfill(2) + '-' + \
-                                 str(time_stamp[4]).zfill(2) + '-' +\
-                                 str(time_stamp[5]).zfill(2)
-                line_to_write = [time_stamp_str, current_time,
-                                 args.instance_location, args.budget,
-                                 full_destruct_probability, upgrade_selection_bias,
-                                 left_budget, loop_counter, num_improvements,
-                                 current_supply[-1], total_demand]
-                with open(args.export_results_tracking, 'ab') as tracking_file:
-                    writer = csv.writer(tracking_file)
-                    writer.writerow(line_to_write)
+            num_improvements_local += 1
+            current_incumbent = True
+        else:
+            current_incumbent = False
+        # export current grid statistics to file
+        if args.export_results_tracking != "False":
+            time_stamp = time.gmtime(current_time)
+            time_stamp_str = str(time_stamp[0]) + '-' + str(time_stamp[1]).zfill(2) + '-' +\
+                             str(time_stamp[2]).zfill(2) + '-' + str(time_stamp[3]).zfill(2) + '-' + \
+                             str(time_stamp[4]).zfill(2) + '-' +\
+                             str(time_stamp[5]).zfill(2)
+            line_to_write = [time_stamp_str, current_time,
+                             args.instance_location, args.budget,
+                             full_destruct_probability, upgrade_selection_bias,
+                             left_budget, loop_counter, num_improvements,
+                             current_supply[-1], total_demand,
+                             local_area_jumps, args.min_neighbors, current_incumbent,
+                             args.min_neighborhoods_total, args.local_improvement_ratio,
+                             args.overall_improvement_ratio_threshold]
+            with open(args.export_results_tracking, 'ab') as tracking_file:
+                writer = csv.writer(tracking_file)
+                writer.writerow(line_to_write)
         # TODO: do something with continue flag
         # TODO: add time counter
         loop_counter += 1
+        loops_local += 1
         current_time = time.time()  # to manage time stopping criteria
         if not (loop_counter % 1):
             elapsed_time = (current_time-start_time)/60
-            print "\r>> Elapsed:", int(elapsed_time)/60, "hours,", int(elapsed_time % 60), "min",\
-                round(elapsed_time * 60.0 % 60, 1),  "sec. ", \
-                "Total rounds", loop_counter,\
-                "improved", num_improvements, "time(s)", \
+            print "\r>> Elapsed:", str(int(elapsed_time)/60) + "hr,", str(int(elapsed_time % 60)) + "m",\
+                str(round(elapsed_time * 60.0 % 60, 1)) + "s.", \
+                "Round", loop_counter,\
+                "Improved", num_improvements, "time(s)", \
                 "(" + str(round(float(num_improvements)/loop_counter*100, 1)), "\b%).",\
-                "Obj.:", current_supply[-1], 'of total demand', '(' + str(total_demand) + ')',\
+                "| Neighborhood", str(local_area_jumps+1) + ",",\
+                "Neighbor", str(loops_local) + ",", "improve rate", \
+                str(round(float(num_improvements_local)/loops_local*100, 1)) + "%.",\
+                "| Overall Obj.:", current_supply[-1], '(of ' + str(total_demand) + ').',\
                 "Gap:", 100-round(current_supply[-1]/total_demand*100, 1), "\b%",
             sys.stdout.flush()
         if args.opt_gap >= 1-current_supply[-1]/total_demand:
             continue_flag = False
-        if args.improvement_ratio >= float(num_improvements)/loop_counter and loop_counter >= 50:
+        if args.local_improvement_ratio >= float(num_improvements_local)/loops_local and \
+                loops_local >= args.min_neighbors:
+            local_area_jumps += 1
+            loops_local = 0
+            num_improvements_local = 0
+            # reset grid to original state and start over the search - jumps to a new neighborhood
+            temporary_grid = original_grid.copy()
+        else:
+            # return back to the best solution found so far
+            temporary_grid = current_grid.copy()
+        if args.overall_improvement_ratio_threshold >= float(num_improvements)/loop_counter and \
+                local_area_jumps >= args.min_neighborhoods_total-1:
+            # in this case the overall ratio is so low, that probably nothing can be done with the heuristic
             continue_flag = False
+
     # write the current solution current_grid to a gpickle file
     if args.export_final_grid != "False":
         if args.export_final_grid == "timestamped" and 'last_optimal_sol_time' in locals():
