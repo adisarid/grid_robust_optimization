@@ -142,3 +142,6 @@ tmp*.py
 # ignore credentials
 send_email_credentials.json
 gmail-python-email-send.json
+
+# ignore pyCharm's idea directory
+.idea
