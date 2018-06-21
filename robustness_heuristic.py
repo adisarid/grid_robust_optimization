@@ -69,8 +69,8 @@ parser.add_argument('--min_neighborhoods_total',
                     help="The minimal number of neighborhoods to search at, before deciding to stop the search."
                          "Search is stopped if MIN_NEIGHBORHOODS_TOTAL neighborhoods were searched, and"
                          "overall improvement ratio is under OVERALL_IMPROVEMENT_RATIO_THRESHOLD."
-                         "[default for minimum 25 neighborhoods]",
-                    type=float, default=25)
+                         "[default for minimum 50 neighborhoods]",
+                    type=float, default=50)
 parser.add_argument('--overall_improvement_ratio_threshold',
                     help="If overall improvement ratio (number of incumbent found out of total solutions searched)"
                          "decreases under OVERALL_IMPROVEMENT_RATIO_THRESHOLD, and at least MIN_NEIGHBORHOODS_TOTAL"
@@ -108,7 +108,7 @@ if not os.path.isfile(args.export_results_tracking):
             "left_budget", "loop_counter", "num_improvements",
             "current_supply", "total_demand",
             "neighborhoods_searched", "min_neighbors_per_neighborhood", "current_incumbent",
-            "min_neighborhoods", "local_improvement_ratio", "overall_improvement_ratio"
+            "min_neighborhoods", "local_improvement_ratio", "overall_improvement_ratio", "temporary_grid_outcome"
         ])
 
 
@@ -191,7 +191,7 @@ def main_program():
                              current_supply[-1], total_demand,
                              local_area_jumps, args.min_neighbors, current_incumbent,
                              args.min_neighborhoods_total, args.local_improvement_ratio,
-                             args.overall_improvement_ratio_threshold]
+                             args.overall_improvement_ratio_threshold, temporary_grid_outcome['supply']]
             with open(args.export_results_tracking, 'ab') as tracking_file:
                 writer = csv.writer(tracking_file)
                 writer.writerow(line_to_write)
