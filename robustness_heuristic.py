@@ -148,6 +148,7 @@ def main_program():
     local_area_jumps = 0  # number of times the algorithm jumps to a new search area
     num_improvements = 0  # number of times the algorithm found a better incumbent
     num_improvements_local = 0  # number of time the algorithm found a better incumbent, in current search area
+    local_no_improve = 0  # number of neighbors examined in the current neighborhood since last improvement
 
     # copy the current grid to a temporary solution
     temporary_grid = current_grid.copy()
@@ -173,6 +174,7 @@ def main_program():
             num_improvements += 1
             num_improvements_local += 1
             current_incumbent = True
+            local_no_improve = -1  # update local neighborhood since last improvement (the "-1" is increased in a bit)
         else:
             current_incumbent = False
         # export current grid statistics to file
@@ -197,6 +199,7 @@ def main_program():
         # TODO: add time counter
         loop_counter += 1
         loops_local += 1
+        local_no_improve += 1
         current_time = time.time()  # to manage time stopping criteria
         if not (loop_counter % 1):
             elapsed_time = (current_time-start_time)/60
@@ -213,10 +216,12 @@ def main_program():
             sys.stdout.flush()
         if args.opt_gap >= 1-current_supply[-1]/total_demand:
             continue_flag = False
-        if num_improvements_local == 0 and loops_local >= args.min_neighbors:
+        if local_no_improve >= args.min_neighbors:
             local_area_jumps += 1
             loops_local = 0
+            local_no_improve = 0
             num_improvements_local = 0  # TODO: Something smarter to decide on "jumping" to a different solution
+
             # reset grid to original state and start over the search - jumps to a new neighborhood
             temporary_grid = original_grid.copy()
         else:
