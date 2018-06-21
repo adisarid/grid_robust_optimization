@@ -48,8 +48,8 @@ parser.add_argument('--export_final_grid', help="Location to which the final pow
 parser.add_argument('--opt_gap', help="Gap from full demand [default 0.01=1%%]",
                     type=float, default=0.01)
 parser.add_argument('--local_improvement_ratio',
-                    help="Bound on improvement ratio (portion of improving solution out of neighborhood iterations) - "
-                         "Jump to a different neighborhood when ratio goes under specified bound [default 0.05=5%%]",
+                    help="*** DEPRECATED *** Not used anymore. Instead, choose the number of neighbors which constitute"
+                         "A 'jumping criteria' if no improvement was achieved. See parameter min_neighbors.",
                     type=float, default=0.05)
 parser.add_argument('--full_destruct_probability',
                     help="Probability at which an edge will be fully destructed during the downgrade operations "
@@ -62,7 +62,8 @@ parser.add_argument('--upgrade_selection_bias',
                     type=float, default=0.5)
 parser.add_argument('--min_neighbors',
                     help="The minimum number of iterations before jumping to a new neighborhood,"
-                         "(even if the improvement ratio is under the threshold) [default 25]",
+                         "if not a single improvement was reached in this neighborhood, during the last"
+                         "MIN_NEIGHBORS count [default 25]",
                     type=float, default=25)
 parser.add_argument('--min_neighborhoods_total',
                     help="The minimal number of neighborhoods to search at, before deciding to stop the search."
@@ -212,8 +213,7 @@ def main_program():
             sys.stdout.flush()
         if args.opt_gap >= 1-current_supply[-1]/total_demand:
             continue_flag = False
-        if args.local_improvement_ratio >= float(num_improvements_local)/loops_local and \
-                loops_local >= args.min_neighbors:
+        if num_improvements_local == 0 and loops_local >= args.min_neighbors:
             local_area_jumps += 1
             loops_local = 0
             num_improvements_local = 0
