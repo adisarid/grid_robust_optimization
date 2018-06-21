@@ -1,5 +1,5 @@
 # generate combinations to export to batch files
-
+setwd("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/")
 # Apollo combinations
 apollo <- expand.grid(instance = c("instance24", "instance300"),
                       budget = c(5, 15, 50, 100, 200),
@@ -13,8 +13,9 @@ apollo <- expand.grid(instance = c("instance24", "instance300"),
                           " --upgrade_selection_bias ",
                           upgrade_selection_bias,
                           " --min_neighbors ",
-                          min_neighbors))
-
+                          min_neighbors,
+                          " --export_results_tracking c:\\temp\\grid_cascade_output\\hr_res_apollo.csv"))
+write_file(apollo$command, path = "")
 
 
 # Beatrix combinations
@@ -30,7 +31,8 @@ beatrix <- expand.grid(instance = c("instance30", "instance118"),
                           " --upgrade_selection_bias ",
                           upgrade_selection_bias,
                           " --min_neighbors ",
-                          min_neighbors))
+                          min_neighbors,
+                          " --export_results_tracking c:\\temp\\grid_cascade_output\\hr_res_beatrix.csv"))
 
 # Gaya combinations
 gaya <- expand.grid(instance = c("instance39", "instance57"),
@@ -45,4 +47,5 @@ gaya <- expand.grid(instance = c("instance39", "instance57"),
                           " --upgrade_selection_bias ",
                           upgrade_selection_bias,
                           " --min_neighbors ",
-                          min_neighbors))
+                          min_neighbors,
+                          " --export_results_tracking c:\\temp\\grid_cascade_output\\hr_res_gaya.csv"))
