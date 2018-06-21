@@ -216,7 +216,7 @@ def main_program():
         if num_improvements_local == 0 and loops_local >= args.min_neighbors:
             local_area_jumps += 1
             loops_local = 0
-            num_improvements_local = 0
+            num_improvements_local = 0  # TODO: Something smarter to decide on "jumping" to a different solution
             # reset grid to original state and start over the search - jumps to a new neighborhood
             temporary_grid = original_grid.copy()
         else:
