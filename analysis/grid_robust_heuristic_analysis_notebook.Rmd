@@ -3,16 +3,104 @@ title: "Analysis of grid robust optimization heuristic"
 output: html_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+The files I'm analyzing here were run on three servers: Gaya, Apollo and Beatrix.
+They analyze the six instances (IEEE24, 30, 39, 57, 118, 300), each time varying different heuristic or problem parameters.
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+   * Budget $\in\{5, 15, 50, 100, 200\}$
+   * upgrade_selection_bias $\in\{25\%, 50\%\}$ -- this parameter controls the weight given to the 
+   failure of upgrading existing grids (with weights relative to failure in scenarios), versus a completely random 
+   selection of new edges or existing edges candidate for capacity upgrades
+   * min_neighbors $\in\{10, 25, 50\}$ -- this parameter controls the number of iterations in a neighborhood (\#neighbors) which 
+   will be examined before moving to a different neighborhood. 
+   The logic works in the following manner: 
+   if no (new) incumbent solution has been reached during the last MIN_NEIGHBORS iterations (of the current neighborhood), 
+   jump to a new neighborhood by resetting to the initial solution.
 
-```{r}
-plot(cars)
+The files have been feched from the server and are stored in this git repository in the same location as this file.
+
+```{r, echo=FALSE, message=FALSE}
+library(tidyverse)
+hr_data <- read_csv("hr_res_apollo.csv") %>%
+  bind_rows(read_csv("hr_res_beatrix.csv"),
+          read_csv("hr_res_gaya.csv"))
+
+glimpse(hr_data)
+
 ```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+The measures (output) from the heuristic include:
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+   * time_stamp_str a timestamp of the line. Note that this was run in parallel in three servers so the timeline is mixed.
+   * current_time same as time_stamp_str only in seconds since epoch
+   * args.intance_location -- which instance this is (which grid)
+   * budget -- the budget constraint
+   * full_destruct_probability -- currently held constant at $10\%$, this parameter controlls the proportion of cases in which edges are completely destrcuted, during the `downgrade` operation
+   * upgrade_selection_bias -- one of the paramters we varied, see previous paragraph for explanations.
+   * left_budget -- during the heuristic run, a global variable, `left_budget`, is continuosly varied around $0$. Where $\geq0$ is the cutpoint for a feasible solution.
+   * loop_counter -- the total number of iterations so far
+   * num_improvements -- number of iterations which found an incumbent (minimum 1)
+   * current_supply -- the objective value for the current line
+   * total_demand -- grid demand (same demand per instance)
+   * neighborhoods_searched -- how many neighborhoods have been searched so far
+   * min_neighbors_per_neighborhood -- see parameter `min_neighbors` which was explained in the previous paragraph
+   * current_incumbent -- is this an incumbent solution?
+   * min_neighborhoods -- the minimum number of neighborhoods to be searched before stopping the heuristic (if no improvement was found)
+   * local_improvement_ratio -- what is the improvement ratio in the current neighborhood
+   * overall_improvement_ratio -- what is the improvement ratio of the heuristic, relative to the current run
+   * temporary_grid_outcome -- the value of the temporary solution (not necessarily incumbent, as in `current_supply`)
+   
+# Setup Parameter Influence
 
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+First question:
+**What is the influence of each of the setup paramters we examined (`upgrade_selection_bias` and `min_neighbors`) on the convergence of the algorithm?**
+
+## The influence of `upgrade_selection_bias`
+
+The influence is not consistent, there seems to be an interaction with other parameters. 
+
+```{r}
+plot.data.selection.bias <- hr_data %>%
+  filter(current_incumbent == "True") %>%
+  mutate(supply_percent = current_supply/total_demand) %>%
+  group_by(upgrade_selection_bias, budget, args.instance_location, min_neighbors_per_neighborhood) %>%
+  summarize(supply_percent = max(supply_percent)) %>%
+  spread(key = upgrade_selection_bias, value = supply_percent) %>%
+  mutate(selection.bias.diff = (`0.5`-`0.25`))
+
+plot.data.selection.bias
+
+ggplot(plot.data.selection.bias, aes(y = selection.bias.diff, x = factor(min_neighbors_per_neighborhood))) +
+  geom_point(aes(color = (budget))) + facet_wrap(~args.instance_location)
+
+convergence.rate.selection.bias <- hr_data %>%
+  filter(current_incumbent == "True") %>%
+  mutate(supply_percent = current_supply/total_demand) %>%
+  left_join(hr_data %>% 
+              group_by(budget, min_neighbors_per_neighborhood, args.instance_location, upgrade_selection_bias) %>%
+              summarize(start.time = min(current_time))
+              ) %>%
+  mutate(current_time = current_time - start.time)
+
+convergence.rate.selection.bias
+
+ggplot(convergence.rate.selection.bias %>% filter(budget == 15),
+       aes(x = current_time, y = supply_percent, color = factor(upgrade_selection_bias))) + 
+  geom_point() + geom_line() + facet_grid(args.instance_location ~ min_neighbors_per_neighborhood) + 
+  ggtitle("Objective value as a function of time, budget = 15")
+
+
+ggplot(convergence.rate.selection.bias %>% filter(budget == 50),
+       aes(x = current_time, y = supply_percent, color = factor(upgrade_selection_bias))) + 
+  geom_point() + geom_line() + facet_grid(args.instance_location ~ min_neighbors_per_neighborhood) + 
+  ggtitle("Objective value as a function of time, budget = 50")
+
+ggplot(convergence.rate.selection.bias %>% filter(budget == 200),
+       aes(x = current_time, y = supply_percent, color = factor(upgrade_selection_bias))) + 
+  geom_point() + geom_line() + facet_grid(args.instance_location ~ min_neighbors_per_neighborhood) + 
+  ggtitle("Objective value as a function of time, budget = 200")
+
+```
+
+It is hard to discern any specific trend relating to the upgrade_selection_bias, it seems that the objective value is not sensitive to this, which seems to indicate that this is not the most important parameter, probably due to the fact that the upgrade_selection_bias only deals with capacity upgrades and ignores establishment of new edges - which are covered during the run and in cases of new neighborhoods. 
+
+Moving on to the new parameter, the `min_neighbors_per_neighborhood`
