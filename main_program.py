@@ -50,10 +50,14 @@ parser.add_argument('--incumbent_display_frequency', help = "Frequency to show i
 parser.add_argument('--max_cascade_depth', help = "The maximal cascade depth to examine in the simulation", type = float, default = 100)
 parser.add_argument('--percent_short_runs', help = 'What % of cases should have a "short run" (stop simulation after max_cascade_depth). When 0.0 then short runs are disabled',
                     type =  float, default = 0.0)
-parser.add_argument('--set_dvar_priorities', help = "Shuold I set decision variable priorities?", action = "store_true")
-parser.add_argument('--line_cost_coef_scale', help = "Coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos",
+parser.add_argument('--set_dvar_priorities', help = "Should I set decision variable priorities?", action = "store_true")
+parser.add_argument('--line_upgrade_cost_coef_scale', help = "Coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos",
                     type = float, default = 5.0)
-parser.add_argument('--line_capacity_coef_scale', help = "Capacity coefficient for new transmission lines and upgrades",
+parser_add_argument('--line_establish_cost_coef_scale', help = "Coefficient for scaling cost for establishing a transmission line",
+                    type = float, default = 5.0)
+parser.add_argument('--line_upgrade_capacity_coef_scale', help = "Capacity coefficient for new transmission lines and upgrades",
+                    type = float, default = 5.0)
+parser.add_argument('--line_establish_capacity_coef_scale', help = "Coefficient for scaling capacity of newely established transmission lines",
                     type = float, default = 5.0)
 
 # ... add additional arguments as required here ..
@@ -90,7 +94,9 @@ from time import strftime, clock, gmtime
 append_solution_statistics = "c:\\temp\\grid_cascade_output\\" + strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - ' + args.instance_location + '_solution_statistics.csv'
 with open(append_solution_statistics, 'ab') as f:
     writer = csv.writer(f)
-    writer.writerow(["line_cost_coef_scale", "line_capacity_coef_scale", "set_decision_var_priorities", "runtime", "net_runtime_simulations", "best_incumbent"])
+    writer.writerow(["line_upgrade_cost_coef_scale", "line_establish_cost_coef_scale",
+                     "line_upgrade_capacity_coef_scale", "line_establish_capacity_coef_scale",
+                     "set_decision_var_priorities", "runtime", "net_runtime_simulations", "best_incumbent"])
 
 best_incumbent = 0 # the best solution reached so far - to be used in the heuristic callback
 run_heuristic_callback = False # default is not to run heuristic callback until the lazy callback indicates a new incumbent
@@ -119,8 +125,10 @@ set_decision_var_priorities = args.set_dvar_priorities
 # **********************************************************************
 # Define some more parameters related to the problem size and difficulty
 # **********************************************************************
-line_capacity_coef_scale = args.line_capacity_coef_scale # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
-line_cost_coef_scale = args.line_cost_coef_scale # the cost coefficient of adding an edge. 1 by default.
+line_upgrade_capacity_coef_scale = args.line_upgrade_capacity_coef_scale  # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
+line_upgrade_cost_coef_scale = args.line_upgrade_cost_coef_scale  # the cost coefficient of adding an edge.
+line_establish_cost_coef_scale = ars.line_establish_cost_coef_scale  # the cost coefficient for establishing an edge.
+line_establish_capacity_coef_scale = args.line_establish_capacity_coef_scale # the capacity coefficient for newly established edges.
 
 # ****************************************************
 # ******* The main program ***************************
@@ -205,7 +213,9 @@ def main_program():
             with open(append_solution_statistics, 'ab') as f:
                 best_incumbent = robust_opt_cplex.solution.get_objective_value()
                 writer = csv.writer(f)
-                writer.writerow([line_cost_coef_scale, line_capacity_coef_scale, set_decision_var_priorities, clock(), "NA", best_incumbent])
+                writer.writerow([line_upgrade_cost_coef_scale, line_establish_cost_coef_scale,
+                                 line_upgrade_capacity_coef_scale, line_establish_capacity_coef_scale,
+                                 set_decision_var_priorities, clock(), "NA", best_incumbent])
 
 
 
@@ -533,16 +543,17 @@ def create_cplex_object():
             robust_opt.linear_constraints.add(lin_expr = [[gen_cap_lhs, gen_cap_lhs_coef]], senses = "L", rhs = [0])
 
     # Make sure that the establishment of edge ('X_', cur_edge) is directly linked to the decision ('c', cur_edge)
-    [robust_opt.linear_constraints.add(lin_expr = [[[dvar_pos[('X_', cur_edge)], dvar_pos[('c', cur_edge)]], [1, -1]]], senses = "L", rhs = [epsilon]) for cur_edge in all_edges if ('X_', cur_edge) in dvar_pos.keys()]
+    # If edge was upgraded than it has necessarily been established
+    [robust_opt.linear_constraints.add(lin_expr = [[[dvar_pos[('X_', cur_edge)], dvar_pos[('c', cur_edge)]], [1, -1]]], senses = "G", rhs = [epsilon]) for cur_edge in all_edges if ('X_', cur_edge) in dvar_pos.keys()]
 
     # Last constraint - budget
     # Investment cost constraint sum(h_ij*cl_ij) + sum(h_i*cg_i + H_i*Z_i) + sum(H_ij*X_ij) <= C
     budget_lhs = [dvar_pos[('c', cur_edge)] for cur_edge in all_edges] + [dvar_pos[('c', cur_node)] for cur_node in all_nodes] + \
                  [dvar_pos[('Z', cur_node)] for cur_node in all_nodes if ('H', cur_node) in nodes.keys()] + \
                  [dvar_pos[('X_', (i[1], i[2]))] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
-    budget_lhs_coef = [line_cost_coef_scale*edges[('h',) + cur_edge] for cur_edge in all_edges] + [nodes[('h', cur_node)] for cur_node in all_nodes] + \
+    budget_lhs_coef = [line_upgrade_cost_coef_scale*edges[('h',) + cur_edge] for cur_edge in all_edges] + [nodes[('h', cur_node)] for cur_node in all_nodes] + \
                  [nodes[('H',cur_node)] for cur_node in all_nodes if ('H',cur_node) in nodes.keys()] + \
-                 [edges[('H',)+(i[1], i[2])] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
+                 [line_establish_cost_coef_scale*edges[('H',)+(i[1], i[2])] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
     robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [params['C']])
 
     return robust_opt
@@ -1010,7 +1021,9 @@ def compute_failures(nodes, edges, scenarios, current_solution, dvar_pos):
         if append_solution_statistics:
             with open(append_solution_statistics, 'ab') as f:
                 writer = csv.writer(f)
-                writer.writerow([line_cost_coef_scale, line_capacity_coef_scale, set_decision_var_priorities, time_spent_total, time_spent_cascade_sim, best_incumbent])
+                writer.writerow([line_upgrade_cost_coef_scale, line_establish_cost_coef_scale,
+                                 line_upgrade_capacity_coef_scale, line_establish_capacity_coef_scale,
+                                 set_decision_var_priorities, time_spent_total, time_spent_cascade_sim, best_incumbent])
         print "Curr sol=", sum(sup_demand), "Incumb=", best_incumbent, "Time on sim=", round(time_spent_cascade_sim), "Tot time", round(time_spent_total), "(", round(time_spent_cascade_sim/time_spent_total*100), "%) on sim"
         print "   Node  Left     Objective  IInf  Best Integer    Cuts/Bound    ItCnt     Gap         Variable B NodeID Parent  Depth"
         # consider later on to add: write incumbent solution to file.
@@ -1035,13 +1048,20 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     G.add_nodes_from(add_nodes)
 
     # add all edges
-    # note an important change from the continuous case to the discrete case: the use of: current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale
-    # this means that the capacity can grow by line_capacity_coef_scale
+    # note an important change from the continuous case to the discrete case: the use of: current_solution[dvar_pos[('c', cur_edge)]]*line_upgrade_capacity_coef_scale
+    # this means that the capacity can grow by line_upgrade_capacity_coef_scale
     # should later on be introduced as part of the input.
     edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges if edge[0] == 'c']
 
-    add_edges_1 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0)]
-    add_edges_2 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos[('c', cur_edge)]]*line_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (('X_', cur_edge) in dvar_pos.keys()) if (current_solution[dvar_pos[('X_', cur_edge)]]> 0.01)]
+    add_edges_1 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] +
+                                                           current_solution[dvar_pos[('c', cur_edge)]] * line_upgrade_capacity_coef_scale,
+                                               'susceptance': edges[('x',) + cur_edge]})
+                   for cur_edge in edge_list if (('X_', cur_edge) not in dvar_pos.keys()) and (edges[('c',) + cur_edge] > 0)]
+    add_edges_2 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] +
+                                                           current_solution[dvar_pos[('c', cur_edge)]] * line_upgrade_capacity_coef_scale +
+                                                           current_solution[dvar_pos[('X_', cur_edge)]] * line_establish_capacity_coef_scale,
+                                               'susceptance': edges[('x',) + cur_edge]})
+                   for cur_edge in edge_list if (('X_', cur_edge) in dvar_pos.keys())]
 
     # Debugging
     #timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime()) + str(round(clock(), 3)) + ' - '
