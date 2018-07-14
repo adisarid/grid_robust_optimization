@@ -30,7 +30,7 @@ import time # for placing timestamps: use functions time.gmtime, time.strftime, 
 # ************************************************
 import argparse
 parser = argparse.ArgumentParser(description = "Run a Power Grid Robust Optimization of 1-cascade depth (PGRO1).")
-parser.add_argument('--instance_location', help = "Provide the location for instance files (directory name)", type = str, default = "case30")
+parser.add_argument('--instance_location', help = "Provide the location for instance files (directory name)", type = str, default = "instance30")
 parser.add_argument('--time_limit', help = "Set a time limit for CPLEX run (in hours)", type = float, default = 0.5)
 parser.add_argument('--opt_gap', help = "Optimality gap for CPLEX run", type = float, default = 0.01) # 0.01 = 1%
 parser.add_argument('--budget', help = "Budget constraint for optimization problem", type = float, default = 100.0)
@@ -41,6 +41,20 @@ parser.add_argument('--disable_cplex_messages', help = "Disables CPLEX's log, wa
 parser.add_argument('--penalize_failures', help = "Attach penalization coefficient to first order cascade failures (specify value)", type = float, default = 0.0)
 parser.add_argument('--use_benders', help = "Use Bender's decomposition", action = "store_true")
 parser.add_argument('--scenario_variant', help = "*** NOT IMPLEMENTED YET *** Select a scenario variant for given instance, i.e. load scenario_failures_VARIANTNAME.csv and scenario_probabilities_VARIANTNAME.csv", type = str, default = "")
+parser.add_argument('--load_capacity_factor', help = "The load capacity factor - "
+                                                     "Change the existing capacity by this factor.",
+                    type = float, default = 1.0)
+parser.add_argument('--line_establish_capacity_coef_scale', help = "Nominal capacity established for new edges",
+                    type = float, default = 0.0)
+parser.add_argument('--line_upgrade_capacity_upper_bound', help = "Upper bound for edge capacity upgrade",
+                    type = float, default = 10000.0)
+parser.add_argument('--line_upgrade_cost_coef_scale', help = "Coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos",
+                    type = float, default = 1.0)
+parser.add_argument('--line_establish_cost_coef_scale', help = "Coefficient for scaling cost for establishing a transmission line",
+                    type = float, default = 1.0)
+
+
+
 # ... add additional arguments as required here ..
 args = parser.parse_args()
 
@@ -188,10 +202,10 @@ def read_edges(filename):
         next(csv_reader) # assuimng header, skip first line
         for row in csv_reader:
             cur_edge = arrange_edge_minmax(row[0], row[1])
-            dic[('c',) + cur_edge] = float(row[2]) # current capacity
+            dic[('c',) + cur_edge] = float(row[2])*args.load_capacity_factor  # current capacity
             dic[('x',) + cur_edge] = float(row[3]) # susceptance
-            dic[('H',) + cur_edge] = float(row[4]) # fixed cost
-            dic[('h',) + cur_edge] = float(row[5]) # variable cost
+            dic[('H',) + cur_edge] = float(row[4])*args.line_establish_cost_coef_scale  # fixed cost
+            dic[('h',) + cur_edge] = float(row[5])*args.line_upgrade_cost_coef_scale  # variable cost
     return dic
 
 def read_scenarios(filename_fail, filename_pr):
@@ -285,6 +299,8 @@ def build_cplex_problem():
     global all_edges
     global all_nodes
     global all_scenarios
+    global new_edges
+    global existing_edges
 
     # epsilon
     global epsilon # depending on grid size, this constant can take various values 1e-10 is probably small enough for any practical situation
@@ -335,6 +351,8 @@ def build_cplex_problem():
 
     # by edges
     all_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'c']
+    new_edges = [(min(i[1],i[2]), max(i[1],i[2])) for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
+    existing_edges = [cur_edge for cur_edge in all_edges if cur_edge not in new_edges]
 
     # define flow variables
     dvar_name += ['flow_i' + str(edge[0]) + '_j' + str(edge[1]) + '_t' + str(t) + '_s' + str(s) for edge in all_edges for t in [1,2] for s in all_scenarios]
@@ -354,7 +372,7 @@ def build_cplex_problem():
     dvar_name += ['c_i' + edge[0] + '_j' + edge[1] for edge in all_edges]
     dvar_obj_coef += [0 for edge in all_edges]
     dvar_lb += [0 for edge in all_edges]
-    dvar_ub += [tot_demand for edge in all_edges]
+    dvar_ub += [args.line_upgrade_capacity_upper_bound for edge in all_edges]
     dvar_type += ['C' for edge in all_edges]
 
     # define variables for establishing a new edge (only if upgrade cost > 0 otherwise the edge already exists)
@@ -426,16 +444,30 @@ def create_cplex_object():
     robust_opt.linear_constraints.add(lin_expr = reactive_new_constraints, senses = "L"*len(reactive_new_constraints), rhs = [bigM]*len(reactive_new_constraints))
     robust_opt.linear_constraints.add(lin_expr = reactive_new2_constraints, senses = "G"*len(reactive_new_constraints), rhs = [-bigM]*len(reactive_new2_constraints))
 
-    # cascade effects occurring at t=1:
+    # cascade effects occurring at t=1 (for existing edges):
     cascade_lhs = [[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s],\
                     dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]],\
-                    dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in all_edges for s in all_scenarios]
-    cascade_lhs_coef = [[1, -1, -bigM] for cur_edge in all_edges for s in all_scenarios]
-    cascade_lhs_coef2 = [[-1, -1, -bigM] for cur_edge in all_edges for s in all_scenarios] # flow direction to the other side
-    cascade_rhs = [edges[('c',) + cur_edge] for cur_edge in all_edges for s in all_scenarios]*2
+                    dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in existing_edges for s in all_scenarios]
+    cascade_lhs_coef = [[1, -1, -bigM] for cur_edge in existing_edges for s in all_scenarios]
+    cascade_lhs_coef2 = [[-1, -1, -bigM] for cur_edge in existing_edges for s in all_scenarios] # flow direction to the other side
+    cascade_rhs = [edges[('c',) + cur_edge] for cur_edge in existing_edges for s in all_scenarios]*2
     cascade_constraints = [[cascade_lhs[i],cascade_lhs_coef[i]] for i in range(len(cascade_lhs))] + \
                           [[cascade_lhs[i],cascade_lhs_coef2[i]] for i in range(len(cascade_lhs))]
     robust_opt.linear_constraints.add(lin_expr = cascade_constraints, senses = "L"*len(cascade_rhs), rhs = cascade_rhs)
+
+    # cascade effects occurring at t=1 (for new edges - add initial capacity factor):
+    cascade_lhs = [[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s], \
+                    dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]], \
+                    dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s],
+                    dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in new_edges for s in all_scenarios]
+    cascade_lhs_coef = [[1, -1, -bigM, -args.line_establish_capacity_coef_scale] for cur_edge in new_edges
+                        for s in all_scenarios]
+    cascade_lhs_coef2 = [[-1, -1, -bigM, -args.line_establish_capacity_coef_scale] for cur_edge in new_edges
+                         for s in all_scenarios]  # flow direction to the other side
+    cascade_rhs = [edges[('c',) + cur_edge] for cur_edge in new_edges for s in all_scenarios] * 2
+    cascade_constraints = [[cascade_lhs[i], cascade_lhs_coef[i]] for i in range(len(cascade_lhs))] + \
+                          [[cascade_lhs[i], cascade_lhs_coef2[i]] for i in range(len(cascade_lhs))]
+    robust_opt.linear_constraints.add(lin_expr=cascade_constraints, senses="L" * len(cascade_rhs), rhs=cascade_rhs)
 
     # transmission capacity - established edges:
     trans_cap_lhs = [[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t' + str(t) + '_s' + s], dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for t in [1,2] for s in all_scenarios if edges[('H', ) + cur_edge] > 0]*2

@@ -53,12 +53,15 @@ parser.add_argument('--percent_short_runs', help = 'What % of cases should have 
 parser.add_argument('--set_dvar_priorities', help = "Should I set decision variable priorities?", action = "store_true")
 parser.add_argument('--line_upgrade_cost_coef_scale', help = "Coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos",
                     type = float, default = 5.0)
-parser_add_argument('--line_establish_cost_coef_scale', help = "Coefficient for scaling cost for establishing a transmission line",
+parser.add_argument('--line_establish_cost_coef_scale', help = "Coefficient for scaling cost for establishing a transmission line",
                     type = float, default = 5.0)
 parser.add_argument('--line_upgrade_capacity_coef_scale', help = "Capacity coefficient for new transmission lines and upgrades",
                     type = float, default = 5.0)
 parser.add_argument('--line_establish_capacity_coef_scale', help = "Coefficient for scaling capacity of newely established transmission lines",
                     type = float, default = 5.0)
+parser.add_argument('--load_capacity_factor', help = "The load capacity factor - "
+                                                     "Change the existing capacity by this factor.",
+                    type = float, default = 1.0)
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -127,8 +130,9 @@ set_decision_var_priorities = args.set_dvar_priorities
 # **********************************************************************
 line_upgrade_capacity_coef_scale = args.line_upgrade_capacity_coef_scale  # the value added by establishing an edge. initilized here temporarily. will be added later on to original data file (grid_edges.csv)
 line_upgrade_cost_coef_scale = args.line_upgrade_cost_coef_scale  # the cost coefficient of adding an edge.
-line_establish_cost_coef_scale = ars.line_establish_cost_coef_scale  # the cost coefficient for establishing an edge.
+line_establish_cost_coef_scale = args.line_establish_cost_coef_scale  # the cost coefficient for establishing an edge.
 line_establish_capacity_coef_scale = args.line_establish_capacity_coef_scale # the capacity coefficient for newly established edges.
+load_capacity_factor = args.load_capacity_factor # change the existing capacity by load_capacity_factor
 
 # ****************************************************
 # ******* The main program ***************************
@@ -231,8 +235,8 @@ def read_nodes(filename):
             dic[('d', row[0])] = float(row[1]) # read demand
             dic[('c', row[0])] = float(row[2]) # read capacity
             dic[('gen_up_ub', row[0])] = float(row[3]) # max generation upgrade
-            dic[('H', row[0])] = float(row[4]) # fixed cost
-            dic[('h', row[0])] = float(row[5]) # variable cost
+            dic[('H', row[0])] = float(row[4])  # fixed cost
+            dic[('h', row[0])] = float(row[5])  # variable cost
     return dic
 
 def read_edges(filename):
@@ -242,10 +246,10 @@ def read_edges(filename):
         next(csv_reader) # assuimng header, skip first line
         for row in csv_reader:
             cur_edge = arrange_edge_minmax(row[0], row[1])
-            dic[('c',) + cur_edge] = float(row[2]) # current capacity
+            dic[('c',) + cur_edge] = float(row[2])*load_capacity_factor  # current capacity
             dic[('x',) + cur_edge] = float(row[3]) # susceptance
-            dic[('H',) + cur_edge] = float(row[4]) # fixed cost
-            dic[('h',) + cur_edge] = float(row[5]) # variable cost
+            dic[('H',) + cur_edge] = float(row[4])*line_establish_cost_coef_scale  # fixed cost
+            dic[('h',) + cur_edge] = float(row[5])*line_upgrade_cost_coef_scale  # variable cost
     return dic
 
 def read_scenarios(filename_fail, filename_pr):
@@ -551,9 +555,9 @@ def create_cplex_object():
     budget_lhs = [dvar_pos[('c', cur_edge)] for cur_edge in all_edges] + [dvar_pos[('c', cur_node)] for cur_node in all_nodes] + \
                  [dvar_pos[('Z', cur_node)] for cur_node in all_nodes if ('H', cur_node) in nodes.keys()] + \
                  [dvar_pos[('X_', (i[1], i[2]))] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
-    budget_lhs_coef = [line_upgrade_cost_coef_scale*edges[('h',) + cur_edge] for cur_edge in all_edges] + [nodes[('h', cur_node)] for cur_node in all_nodes] + \
+    budget_lhs_coef = [edges[('h',) + cur_edge] for cur_edge in all_edges] + [nodes[('h', cur_node)] for cur_node in all_nodes] + \
                  [nodes[('H',cur_node)] for cur_node in all_nodes if ('H',cur_node) in nodes.keys()] + \
-                 [line_establish_cost_coef_scale*edges[('H',)+(i[1], i[2])] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
+                 [edges[('H',)+(i[1], i[2])] for i in edges.keys() if i[0] == 'H' and edges[i] > 0]
     robust_opt.linear_constraints.add(lin_expr = [[budget_lhs, budget_lhs_coef]], senses = "L", rhs = [params['C']])
 
     return robust_opt
