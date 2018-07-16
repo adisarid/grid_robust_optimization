@@ -43,8 +43,8 @@ parser.add_argument('--export_results_tracking', help="Location of solution outp
 parser.add_argument('--export_final_grid', help="Location to which the final power grid will be saved, as a gpickle"
                                                 "(default c:/temp/grid_cascade_output/"
                                                 "YYYY-MM-DD-hh-mm_heuristic_sol_*instance*.gpickle"
-                                                "Set as False to skip saving",
-                    type=str, default="timestamped")
+                                                "Set as False to skip saving (default)",
+                    type=str, default="False")
 parser.add_argument('--opt_gap', help="Gap from full demand [default 0.01=1%%]",
                     type=float, default=0.01)
 parser.add_argument('--local_improvement_ratio',
