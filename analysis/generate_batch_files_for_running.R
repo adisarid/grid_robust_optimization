@@ -164,7 +164,10 @@ complete.batch <- one.depth.complete %>%
                                str_detect(runcommand, "one_depth") ~ "One depth approximation",
                                str_detect(runcommand, "main_program.py") ~ "Lazy callbacks"),
          dump = seq_along(instance)) %>%
-  mutate(runcommand = paste0(runcommand, " --dump_file ", dump))
+  mutate(runcommand = paste0(runcommand, " --dump_file ", dump)) %>%
+  mutate(neworder = rep(1:16,3)) %>%
+  arrange(neworder) %>%
+  select(-neworder)
   
 openxlsx::write.xlsx(complete.batch, "new.batch.parameters.xlsx")
 
