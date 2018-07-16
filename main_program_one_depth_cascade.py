@@ -52,7 +52,9 @@ parser.add_argument('--line_upgrade_cost_coef_scale', help = "Coefficient to add
                     type = float, default = 1.0)
 parser.add_argument('--line_establish_cost_coef_scale', help = "Coefficient for scaling cost for establishing a transmission line",
                     type = float, default = 1.0)
-
+parser.add_argument('--dump_file', help="Save the final objective outcome (number of run), "
+                                          "saved to c:/temp/grid_cascade_output/dump.csv",
+                    type=float, default=0.0)
 
 
 # ... add additional arguments as required here ..
@@ -118,7 +120,9 @@ def main_program():
                                         in enumerate(ctypes)
                                         if j == continuous])
 
+    start_time = time.time()
     robust_opt_cplex.solve()  #solve the model
+    elapsed_time = time.time() - start_time
 
     print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
     # the following line prints the corresponding status string
@@ -172,10 +176,16 @@ def main_program():
 
         # Finish
         print "*** Program completed ***"
+        # objective in "total supplied average"
+        objective_value_full_cascade = sum([tot_supply_sce_cascade[i] * scenarios[('s_pr', i)] for i in all_scenarios])
+        with open("c:/temp/grid_cascade_output/dump.csv", 'ab') as dump_file:
+            writer = csv.writer(dump_file)
+            writer.writerow([args.dump_file, objective_value_full_cascade, elapsed_time])
+        write_names_values(current_solution, current_var_names,
+                           'c:/temp/grid_cascade_output/detailed_results/' + str(args.dump_file) + '.csv')
         return({'cfe_dict_results': cfe_dict_results, 'current_solution': current_solution})
     else:
         print "*** Program completed *** ERROR: No solution found."
-
 
 
 

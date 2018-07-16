@@ -86,6 +86,9 @@ parser.add_argument('--line_upgrade_cost_coef_scale', help="Coefficient to add t
 parser.add_argument('--line_establish_cost_coef_scale', help="Coefficient for scaling cost for "
                                                              "establishing a transmission line",
                     type=float, default=1.0)
+parser.add_argument('--dump_file', help="Save the final objective outcome (number of run), "
+                                          "saved to c:/temp/grid_cascade_output/dump.csv",
+                    type=float, default=0.0)
 # ... add additional arguments as required here ..
 args = parser.parse_args()
 
@@ -253,6 +256,11 @@ def main_program():
         else:
             filename = args.export_final_grid
         nx.write_gpickle(current_grid, filename)
+
+    with open("c:/temp/grid_cascade_output/dump.csv", 'ab') as dump_file:
+        writer = csv.writer(dump_file)
+        writer.writerow([args.dump_file, max(current_supply), elapsed_time*60])
+    nx.write_gpickle(current_grid, "c:/temp/grid_cascade_output/detailed_results/" + str(args.dump_file) + '.gpickle')
     print "Program complete."
 
 

@@ -52,9 +52,9 @@ parser.add_argument('--percent_short_runs', help = 'What % of cases should have 
                     type =  float, default = 0.0)
 parser.add_argument('--set_dvar_priorities', help = "Should I set decision variable priorities?", action = "store_true")
 parser.add_argument('--line_upgrade_cost_coef_scale', help = "Coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos",
-                    type = float, default = 5.0)
+                    type = float, default = 1.0)
 parser.add_argument('--line_establish_cost_coef_scale', help = "Coefficient for scaling cost for establishing a transmission line",
-                    type = float, default = 5.0)
+                    type = float, default = 1.0)
 parser.add_argument('--line_upgrade_capacity_coef_scale', help = "Capacity coefficient for new transmission lines and upgrades",
                     type = float, default = 5.0)
 parser.add_argument('--line_establish_capacity_coef_scale', help = "Coefficient for scaling capacity of newely established transmission lines",
@@ -62,6 +62,9 @@ parser.add_argument('--line_establish_capacity_coef_scale', help = "Coefficient 
 parser.add_argument('--load_capacity_factor', help = "The load capacity factor - "
                                                      "Change the existing capacity by this factor.",
                     type = float, default = 1.0)
+parser.add_argument('--dump_file', help="Save the final objective outcome (number of run), "
+                                          "saved to c:/temp/grid_cascade_output/dump.csv",
+                    type=float, default=0.0)
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -138,6 +141,7 @@ load_capacity_factor = args.load_capacity_factor # change the existing capacity 
 # ******* The main program ***************************
 # ****************************************************
 def main_program():
+    start_time = time()
     timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
 
     if print_debug:
@@ -175,6 +179,8 @@ def main_program():
     #robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
 
     robust_opt_cplex.solve()  #solve the model
+
+    elapsed_time = time() - start_time  # total time the model was run.
 
     print "Solution status = " , robust_opt_cplex.solution.get_status(), ":",
     # the following line prints the corresponding status string
@@ -221,6 +227,11 @@ def main_program():
                                  line_upgrade_capacity_coef_scale, line_establish_capacity_coef_scale,
                                  set_decision_var_priorities, clock(), "NA", best_incumbent])
 
+    with open("c:/temp/grid_cascade_output/dump.csv", 'ab') as dump_file:
+        writer = csv.writer(dump_file)
+        writer.writerow([args.dump_file, best_incumbent, elapsed_time])
+    write_names_values(current_solution, current_var_names,
+                       'c:/temp/grid_cascade_output/detailed_results/' + str(args.dump_file) + '.csv')
 
 
 # ****************************************************
