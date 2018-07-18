@@ -31,7 +31,7 @@ from time import gmtime, strftime, clock, time # for placing timestamp on debug 
 import argparse
 parser = argparse.ArgumentParser(description = "Run a Power Grid Robust Optimization of full cascade depth (PGRO2) with Lazy constraints callback.")
 parser.add_argument('--instance_location', help = "Provide the location for instance files (directory name)", type = str, default = "case30")
-parser.add_argument('--time_limit', help = "Set a time limit for CPLEX run (in hours)", type = float, default = 0.5)
+parser.add_argument('--time_limit', help = "Set a time limit for CPLEX run (in hours)", type = float, default = 1)
 parser.add_argument('--opt_gap', help = "Optimality gap for CPLEX run", type = float, default = 0.01) # 0.01 = 1%
 parser.add_argument('--budget', help = "Budget constraint for optimization problem", type = float, default = 100.0)
 parser.add_argument('--print_lp', help = "Export c:/temp/grid_cascade_output/tmp_robust_1_cascade.lp", action = "store_true")
