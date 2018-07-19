@@ -25,3 +25,16 @@ instance.edge.costs <- tibble(instance = c(30, 57, 118, 300),
   mutate(total.grid.cost = establish.cost*tot_edges_installed + upgrade.cost*tot_cap_installed,
          average.edge.capacity = tot_cap_installed/tot_edges_installed) %>%
   mutate(cap.upgrade.cost = average.edge.capacity/2)
+
+
+
+# compute total demand
+tot.demand <- tibble(instance.list = paste0("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/instance",
+                     c(24, 30, 39, 57, 118, 300), "/grid_nodes.csv")) %>%
+  group_by(instance.list) %>%
+  mutate(nodes = map(instance.list, read_csv)) %>%
+  ungroup() %>%
+  unnest() %>%
+  group_by(instance.list) %>%
+  summarize(tot.demand = sum(demand))
+  
