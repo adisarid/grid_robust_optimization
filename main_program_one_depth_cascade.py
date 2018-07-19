@@ -46,7 +46,7 @@ parser.add_argument('--load_capacity_factor', help = "The load capacity factor -
                     type = float, default = 1.0)
 parser.add_argument('--line_establish_capacity_coef_scale', help = "Nominal capacity established for new edges",
                     type = float, default = 0.0)
-parser.add_argument('--line_upgrade_capacity_upper_bound', help = "Upper bound for edge capacity upgrade",
+parser.add_argument('--line_upgrade_capacity_coef_scale', help = "Upper bound for edge capacity upgrade",
                     type = float, default = 10000.0)
 parser.add_argument('--line_upgrade_cost_coef_scale', help = "Coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos",
                     type = float, default = 1.0)
@@ -382,7 +382,7 @@ def build_cplex_problem():
     dvar_name += ['c_i' + edge[0] + '_j' + edge[1] for edge in all_edges]
     dvar_obj_coef += [0 for edge in all_edges]
     dvar_lb += [0 for edge in all_edges]
-    dvar_ub += [args.line_upgrade_capacity_upper_bound for edge in all_edges]
+    dvar_ub += [args.line_upgrade_capacity_coef_scale for edge in all_edges]
     dvar_type += ['C' for edge in all_edges]
 
     # define variables for establishing a new edge (only if upgrade cost > 0 otherwise the edge already exists)
