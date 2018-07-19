@@ -45,9 +45,9 @@ parser.add_argument('--load_capacity_factor', help = "The load capacity factor -
                                                      "Change the existing capacity by this factor.",
                     type = float, default = 1.0)
 parser.add_argument('--line_establish_capacity_coef_scale', help = "Nominal capacity established for new edges",
-                    type = float, default = 0.0)
+                    type = float, default = 1.0)
 parser.add_argument('--line_upgrade_capacity_coef_scale', help = "Upper bound for edge capacity upgrade",
-                    type = float, default = 10000.0)
+                    type = float, default = 10.0)
 parser.add_argument('--line_upgrade_cost_coef_scale', help = "Coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos",
                     type = float, default = 1.0)
 parser.add_argument('--line_establish_cost_coef_scale', help = "Coefficient for scaling cost for establishing a transmission line",
@@ -67,7 +67,6 @@ args = parser.parse_args()
 epsilon = 1e-3
 bigM = 10000
 instance_location = os.getcwd() + '\\' + args.instance_location + '\\'
-
 
 # ****************************************************
 # ******* The main program ***************************
@@ -382,8 +381,8 @@ def build_cplex_problem():
     dvar_name += ['c_i' + edge[0] + '_j' + edge[1] for edge in all_edges]
     dvar_obj_coef += [0 for edge in all_edges]
     dvar_lb += [0 for edge in all_edges]
-    dvar_ub += [args.line_upgrade_capacity_coef_scale for edge in all_edges]
-    dvar_type += ['C' for edge in all_edges]
+    dvar_ub += [1 for edge in all_edges]
+    dvar_type += ['B' for edge in all_edges]
 
     # define variables for establishing a new edge (only if upgrade cost > 0 otherwise the edge already exists)
     dvar_name += ['X_i' + edge[0] + '_j' + edge[1] for edge in all_edges if edges[('H',) + edge] > 0]
@@ -458,8 +457,8 @@ def create_cplex_object():
     cascade_lhs = [[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s],\
                     dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]],\
                     dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s]] for cur_edge in existing_edges for s in all_scenarios]
-    cascade_lhs_coef = [[1, -1, -bigM] for cur_edge in existing_edges for s in all_scenarios]
-    cascade_lhs_coef2 = [[-1, -1, -bigM] for cur_edge in existing_edges for s in all_scenarios] # flow direction to the other side
+    cascade_lhs_coef = [[1, -args.line_upgrade_capacity_coef_scale, -bigM] for cur_edge in existing_edges for s in all_scenarios]
+    cascade_lhs_coef2 = [[-1, -args.line_upgrade_capacity_coef_scale, -bigM] for cur_edge in existing_edges for s in all_scenarios] # flow direction to the other side
     cascade_rhs = [edges[('c',) + cur_edge] for cur_edge in existing_edges for s in all_scenarios]*2
     cascade_constraints = [[cascade_lhs[i],cascade_lhs_coef[i]] for i in range(len(cascade_lhs))] + \
                           [[cascade_lhs[i],cascade_lhs_coef2[i]] for i in range(len(cascade_lhs))]
@@ -470,9 +469,9 @@ def create_cplex_object():
                     dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]], \
                     dvar_pos['F_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t1_s' + s],
                     dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in new_edges for s in all_scenarios]
-    cascade_lhs_coef = [[1, -1, -bigM, -args.line_establish_capacity_coef_scale] for cur_edge in new_edges
+    cascade_lhs_coef = [[1, -args.line_upgrade_capacity_coef_scale, -bigM, -args.line_establish_capacity_coef_scale] for cur_edge in new_edges
                         for s in all_scenarios]
-    cascade_lhs_coef2 = [[-1, -1, -bigM, -args.line_establish_capacity_coef_scale] for cur_edge in new_edges
+    cascade_lhs_coef2 = [[-1, -args.line_upgrade_capacity_coef_scale, -bigM, -args.line_establish_capacity_coef_scale] for cur_edge in new_edges
                          for s in all_scenarios]  # flow direction to the other side
     cascade_rhs = [edges[('c',) + cur_edge] for cur_edge in new_edges for s in all_scenarios] * 2
     cascade_constraints = [[cascade_lhs[i], cascade_lhs_coef[i]] for i in range(len(cascade_lhs))] + \
@@ -562,8 +561,8 @@ def create_cplex_object():
 
     # transmission capacity - within capacity after 1st cascade, i.e., t=2 (*different from previous approach*)
     capacity_round2_lhs = [[dvar_pos['flow_i' + cur_edge[0] + '_j' + cur_edge[1] + '_t2_s' + s], dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]] for cur_edge in all_edges for s in all_scenarios]*2
-    capacity_round2_lhs_coef = [[1, -1] for cur_edge in all_edges for s in all_scenarios] + \
-                               [[1, 1] for cur_edge in all_edges for s in all_scenarios]
+    capacity_round2_lhs_coef = [[1, -args.line_upgrade_capacity_coef_scale] for cur_edge in all_edges for s in all_scenarios] + \
+                               [[1, args.line_upgrade_capacity_coef_scale] for cur_edge in all_edges for s in all_scenarios]
     capacity_round2_rhs = [edges[('c',) + cur_edge] for cur_edge in all_edges for s in all_scenarios] + \
                           [-edges[('c',) + cur_edge] for cur_edge in all_edges for s in all_scenarios]
     capacity_round2_constraint = [[capacity_round2_lhs[i], capacity_round2_lhs_coef[i]] for i in range(len(capacity_round2_lhs))]
@@ -574,7 +573,7 @@ def create_cplex_object():
                   [dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]] for cur_edge in all_edges if edges[('H',) + cur_edge] > 0] + \
                   [dvar_pos['c_i' + cur_node] for cur_node in all_nodes] + \
                   [dvar_pos['Z_i' + cur_node] for cur_node in all_nodes]
-    budget_lhs_coef = [edges[('h',) + cur_edge] for cur_edge in all_edges] + \
+    budget_lhs_coef = [edges[('h',) + cur_edge]*args.line_upgrade_capacity_coef_scale for cur_edge in all_edges] + \
                        [edges[('H',) + cur_edge] for cur_edge in all_edges if edges[('H',) + cur_edge] > 0] + \
                        [nodes[('h', cur_node)] for cur_node in all_nodes] + \
                        [nodes[('H', cur_node)] for cur_node in all_nodes]
@@ -1078,8 +1077,8 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     # should later on be introduced as part of the input.
     edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges if edge[0] == 'c']
 
-    add_edges_1 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]], 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0)]
-    add_edges_2 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]], 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if ('X_i' + cur_edge[0] + '_j' + cur_edge[1] in dvar_pos.keys()) and (current_solution[dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]]> 0.01)]
+    add_edges_1 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]]*args.line_upgrade_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0)]
+    add_edges_2 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]]*args.line_upgrade_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if ('X_i' + cur_edge[0] + '_j' + cur_edge[1] in dvar_pos.keys()) and (current_solution[dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]]> 0.01)]
 
     # Debugging
     #timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime()) + str(round(clock(), 3)) + ' - '
