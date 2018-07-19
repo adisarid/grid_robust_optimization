@@ -70,7 +70,8 @@ plot.data.selection.bias <- hr_data %>%
 plot.data.selection.bias
 
 ggplot(plot.data.selection.bias, aes(y = selection.bias.diff, x = factor(min_neighbors_per_neighborhood))) +
-  geom_point(aes(color = (budget))) + facet_wrap(~args.instance_location)
+  geom_point(aes(color = (budget))) + facet_wrap(~args.instance_location) + 
+  ggtitle("Comparison of LNS result between two values of upgrade_selection_bias")
 
 convergence.rate.selection.bias <- hr_data %>%
   filter(current_incumbent == "True") %>%
@@ -103,4 +104,88 @@ ggplot(convergence.rate.selection.bias %>% filter(budget == 200),
 
 It is hard to discern any specific trend relating to the upgrade_selection_bias, it seems that the objective value is not sensitive to this, which seems to indicate that this is not the most important parameter, probably due to the fact that the upgrade_selection_bias only deals with capacity upgrades and ignores establishment of new edges - which are covered during the run and in cases of new neighborhoods. 
 
-Moving on to the new parameter, the `min_neighbors_per_neighborhood`
+Moving on to the new parameter, the `min_neighbors_per_neighborhood` and understanding how it influences the convergence or the solution.
+
+```{r}
+plot.data.min.neighbors <- hr_data %>%
+  filter(current_incumbent == "True") %>%
+  mutate(supply_percent = current_supply/total_demand) %>%
+  group_by(upgrade_selection_bias, budget, args.instance_location, min_neighbors_per_neighborhood) %>%
+  summarize(supply_percent = max(supply_percent)) %>%
+  spread(key = min_neighbors_per_neighborhood, value = supply_percent) 
+
+
+ggplot(convergence.rate.selection.bias %>% filter(budget == 15),
+       aes(x = current_time, y = supply_percent, color = factor(min_neighbors_per_neighborhood))) + 
+  geom_point() + geom_line() + facet_grid(args.instance_location ~ upgrade_selection_bias) + 
+  ggtitle("Objective value as a function of time, budget = 15")
+
+
+ggplot(convergence.rate.selection.bias %>% filter(budget == 50),
+       aes(x = current_time, y = supply_percent, color = factor(min_neighbors_per_neighborhood))) + 
+  geom_point() + geom_line() + facet_grid(args.instance_location ~ upgrade_selection_bias) +   ggtitle("Objective value as a function of time, budget = 50")
+
+ggplot(convergence.rate.selection.bias %>% filter(budget == 200),
+       aes(x = current_time, y = supply_percent, color = factor(min_neighbors_per_neighborhood))) + 
+  geom_point() + geom_line() + facet_grid(args.instance_location ~ upgrade_selection_bias) +   ggtitle("Objective value as a function of time, budget = 200")
+
+```
+
+## Comparison of the objective value in the heuristic algorithm versus the objective value in the 1-depth optimization
+
+The following code assumes that `results_one_depth_analysis.R` has been run.
+For these charts, I'm only using specific setup parameters, i.e.:
+
+  * `min_neighbors_per_neighborhood` $=25$
+  * `upgrade_selection_bias` $=50\%$
+```{r}
+
+total.demands <- hr_data %>%
+  group_by(args.instance_location, budget) %>%
+  summarize(total.demand = max(total_demand)) %>%
+  rename(instance = args.instance_location)
+
+# show the objective attained per instance, per budget
+best.obj.heuristic <- hr_data %>%
+  filter(min_neighbors_per_neighborhood == 25 & upgrade_selection_bias == 0.5) %>%
+  group_by(args.instance_location, budget) %>%
+  summarize(heuristic.obj = max(current_supply)) %>%
+  rename(instance = args.instance_location)
+
+opt.results.comp <- full.res %>%
+  left_join(best.obj.heuristic) %>%
+  left_join(total.demands) %>%
+  rename(one.depth.obj = objective) %>%
+  ungroup() %>%
+  select(-filename) %>%
+  filter(budget > 0) %>%
+  mutate(heuristic.obj.prc = heuristic.obj/total.demand,
+         one.depth.obj.prc = one.depth.obj/total.demand) %>%
+  left_join(aggregated.full.cascade %>%
+              select(instance, budget, mean.objective) %>%
+              rename(one.depth.fullcascade.mean = mean.objective)) %>%
+  mutate(one.depth.fullcascade.mean.prc = one.depth.fullcascade.mean/total.demand)
+
+# chart it
+opt.results.chartdata <- opt.results.comp %>%
+  select(instance, budget, ends_with("prc")) %>%
+  filter(budget != 150) %>%
+  gather(measure, value, -instance, -budget) %>%
+  mutate(measure = recode(measure,
+                          `heuristic.obj.prc` = "LNS Heuristic",
+                          `one.depth.fullcascade.mean.prc` = "One depth approx.\n(full cascade result)",
+                          `one.depth.obj.prc` = "One depth approximation\n(1depth objective)")) %>%
+  filter(measure != "One depth approximation\n(1depth objective)")
+
+
+opt.method.compare <- ggplot(opt.results.chartdata, aes(x = budget, y = value, color = measure)) + facet_wrap(~ instance) + 
+  geom_point() + geom_line() + scale_y_continuous(labels = scales::percent) + 
+  guides(color = guide_legend("Optimization\nmethod")) + 
+  xlab("Budget [$]") + ylab("% demand") + 
+  coord_cartesian(ylim = c(0.75, 1))
+
+opt.method.compare
+
+```
+
+
