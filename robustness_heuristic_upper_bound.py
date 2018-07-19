@@ -86,6 +86,12 @@ parser.add_argument('--line_upgrade_cost_coef_scale', help="Coefficient to add t
 parser.add_argument('--line_establish_cost_coef_scale', help="Coefficient for scaling cost for "
                                                              "establishing a transmission line",
                     type=float, default=1.0)
+parser.add_argument('--line_upgrade_capacity_coef_scale',
+                    help = "Capacity coefficient for new transmission lines and upgrades",
+                    type = float, default = 5.0)
+parser.add_argument('--line_establish_capacity_coef_scale',
+                    help = "Coefficient for scaling capacity of newely established transmission lines",
+                    type = float, default = 5.0)
 parser.add_argument('--dump_file', help="Save the final objective outcome (number of run), "
                                           "saved to c:/temp/grid_cascade_output/dump.csv",
                     type=float, default=0.0)
@@ -149,8 +155,8 @@ def main_program():
     existing_capacities = [edges[cur_edge] for cur_edge in edges.keys() if cur_edge[0] == 'c' and edges[cur_edge] > 0]
     global upgrade_downgrade_step  # user for defining the upgrade/downgrade steps
     global establish_step  # step used when establishing a new edges - the average of existing edges
-    upgrade_downgrade_step = (float(sum(existing_capacities)) / len(existing_capacities)) / 2
-    establish_step = (float(sum(existing_capacities)) / len(existing_capacities))
+    upgrade_downgrade_step = args.line_upgrade_capacity_coef_scale
+    establish_step = args.line_establish_capacity_coef_scale
 
     # compute the remaining budget after th initial solution has been determined
     left_budget = compute_left_budget(current_grid.copy(), edges)  # for now, this should equal budget,
