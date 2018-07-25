@@ -7,8 +7,6 @@ setwd("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/")
 
 source("analysis/grid_sunken_cost.R")
 
-# TODO: Fix budget and other capacity related parameters when capacity is reduced by 20%.
-
 # use instance.edge.costs and tot.demand from the sourced file
 
 prep.grid.data <- instance.edge.costs %>%
@@ -36,5 +34,8 @@ base.batch.options <- expand.grid(instance = c(30, 57, 118, 300),
                              " --line_upgrade_capacity_coef_scale ", line_upgrade_capacity_coef_scale,
                              " --line_establish_cost_coef_scale ", line_establish_cost_coef_scale,
                              " --line_establish_capacity_coef_scale ", line_establish_capacity_coef_scale,
-                             " --dump_file ", dump_file))
+                             " --dump_file ", dump_file)) %>%
+  left_join(tot.demand)
 
+write(base.batch.options$runcommand, "../algorithm_comparison.bat")
+openxlsx::write.xlsx(x = base.batch.options, file = "new.batch.parameters.xlsx")
