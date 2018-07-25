@@ -145,3 +145,4 @@ gmail-python-email-send.json
 
 # ignore pyCharm's idea directory
 .idea
+.Rproj.user
