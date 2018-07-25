@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser(description = "Run a Power Grid Robust Optimiza
 parser.add_argument('--instance_location', help = "Provide the location for instance files (directory name)", type = str, default = "case30")
 parser.add_argument('--time_limit', help = "Set a time limit for CPLEX run (in hours)", type = float, default = 1)
 parser.add_argument('--opt_gap', help = "Optimality gap for CPLEX run", type = float, default = 0.01) # 0.01 = 1%
-parser.add_argument('--budget', help = "Budget constraint for optimization problem", type = float, default = 100.0)
+parser.add_argument('--budget', help = "Budget constraint for optimization problem", type = float, default = 0.0)
 parser.add_argument('--print_lp', help = "Export c:/temp/grid_cascade_output/tmp_robust_1_cascade.lp", action = "store_true")
 parser.add_argument('--print_debug_function_tracking', help = "Print a message upon entering each function", action = "store_true")
 parser.add_argument('--export_results_file', help = "Save the solution file with variable names", action = "store_true")
