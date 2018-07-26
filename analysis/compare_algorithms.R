@@ -20,7 +20,8 @@ res <- read_csv("c:/temp/grid_cascade_output/dump.csv", col_names = c("dump", "v
          line_upgrade_cost = upgrade.cost*line_upgrade_capacity_coef_scale) %>%
   mutate(max.expanse = 
            tot_potential_edges*line_establish_cost +
-           (tot_edges_installed + tot_potential_edges)*line_upgrade_cost)
+           (tot_edges_installed + tot_potential_edges)*line_upgrade_cost) %>%
+  mutate(load_capacity_factor = load_capacity_factor*1.5)
 
 glimpse(res)
 
