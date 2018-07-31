@@ -44,3 +44,15 @@ base.batch.options <- expand.grid(instance = c(30, 57, 118, 300),
 
 write(base.batch.options$runcommand, "../algorithm_comparison.bat")
 openxlsx::write.xlsx(x = base.batch.options, file = "new.batch.parameters.xlsx")
+
+
+# lazy algorithm - to compare node select and variable select strategies
+lazy.search.strategy.compare <- tibble(param = "node_select_strategy", param_value = c(0, 2:3)) %>%
+  bind_rows(tibble(param = "variable_select_strategy", param_value = -1:4),
+            tibble(param = "mip_emphasis", param_value = 1:4)) %>%
+  mutate(dump_file = 100 + seq_along(param)) %>%
+  mutate(runcommand = 
+           paste0("python main_program.py --instance_location instance118 --budget 566.933899441341 --load_capacity_factor 0.8 --line_upgrade_capacity_coef_scale 40.2301675977654 --line_establish_cost_coef_scale 10 --line_establish_capacity_coef_scale 80.4603351955307", 
+                  " --", param, " ", param_value,
+                  " --dump_file ", dump_file))
+write(lazy.search.strategy.compare$runcommand, "../lazy_compare_strategies.bat")
