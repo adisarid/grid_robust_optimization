@@ -50,7 +50,7 @@ parser.add_argument('--incumbent_display_frequency', help = "Frequency to show i
 parser.add_argument('--max_cascade_depth', help = "The maximal cascade depth to examine in the simulation", type = float, default = 100)
 parser.add_argument('--percent_short_runs', help = 'What % of cases should have a "short run" (stop simulation after max_cascade_depth). When 0.0 then short runs are disabled',
                     type =  float, default = 0.0)
-parser.add_argument('--set_dvar_priorities', help = "Should I set decision variable priorities?", action = "store_true")
+parser.add_argument('--disable_dvar_priorities', help = "Should I disable decision variable priorities?", action = "store_true")
 parser.add_argument('--line_upgrade_cost_coef_scale', help = "Coefficient to add to transmission line capacity variable to scale cost for binary instead of continuouos",
                     type = float, default = 1.0)
 parser.add_argument('--line_establish_cost_coef_scale', help = "Coefficient for scaling cost for establishing a transmission line",
@@ -65,6 +65,49 @@ parser.add_argument('--load_capacity_factor', help = "The load capacity factor -
 parser.add_argument('--dump_file', help="Save the final objective outcome (number of run), "
                                           "saved to c:/temp/grid_cascade_output/dump.csv",
                     type=float, default=0.0)
+parser.add_argument('--variable_select_strategy', type = int, default = 0,
+                    help = "Sets the rule for selecting the branching variable at the node "
+                           "which has been selected for branching."
+                           "https://www.ibm.com/support/knowledgecenter/SSSA5P_12.5.0/ilog.odms.cplex.help/CPLEX/Parameters/topics/VarSel.html"
+                           "(-1) The minimum infeasibility rule chooses the variable with the value closest to an integer "
+                           "but still fractional. The minimum infeasibility rule (-1) may lead more quickly to a "
+                           "first integer feasible solution, but is usually slower overall to reach "
+                           "the optimal integer solution."
+                           "(1) The maximum infeasibility rule chooses the variable with the value furtherest "
+                           "from an integer. The maximum infeasibility rule (1 one) forces larger changes "
+                           "earlier in the tree."
+                           "(2) Pseudo cost variable selection is derived from pseudo-shadow prices."
+                           "(3) Strong branching causes variable selection based on partially solving a number "
+                           "of subproblems with tentative branches to see which branch is the most promising. "
+                           "This strategy can be effective on large, difficult MIP problems."
+                           "(4) Pseudo reduced costs (4) are a computationally less-intensive form of pseudo costs."
+                           "(0, default) Allows CPLEX to select the best rule based on the problem "
+                           "and its progress.")
+parser.add_argument('--node_select_strategy', type = int, default = 1,
+                    help = "Sets the rule for selecting the next node to process when the search is backtracking. "
+                           "(0) The depth-first search strategy chooses the most recently created node. "
+                           "(1, default) The best-bound strategy chooses the node with the best objective function for"
+                           "the associated LP relaxation. "
+                           "(2) The best-estimate strategy selects the node with the best estimate of the integer "
+                           "objective value that would be obtained from a node once all integer infeasibilities "
+                           "are removed. "
+                           "(3) An alternative best-estimate search is also available.")
+parser.add_argument('--mip_emphasis', type = int, default = 0,
+                    help = "Controls trade-offs between speed, feasibility, optimality, and moving bounds in MIP."
+                           "(0) With the default setting of BALANCED, CPLEX works toward a rapid proof of an optimal "
+                           "solution, but balances that with effort toward finding high quality feasible solutions "
+                           "early in the optimization."
+                           "(1) When this parameter is set to FEASIBILITY, CPLEX frequently will generate more "
+                           "feasible solutions as it optimizes the problem, at some sacrifice in the speed "
+                           "to the proof of optimality."
+                           "(2) When set to OPTIMALITY, less effort may be applied to finding feasible solutions early."
+                           "(3) With the setting BESTBOUND, even greater emphasis is placed on proving optimality "
+                           "through moving the best bound value, so that the detection of feasible solutions "
+                           "along the way becomes almost incidental."
+                           "(4) When the parameter is set to HIDDENFEAS, the MIP optimizer works hard to find high "
+                           "quality feasible solutions that are otherwise very difficult to find, "
+                           "so consider this setting when the FEASIBILITY setting has difficulty "
+                           "finding solutions of acceptable quality.")
 
 # ... add additional arguments as required here ..
 args = parser.parse_args()
@@ -126,7 +169,7 @@ max_cascade_depth = args.max_cascade_depth # where should the simulation be cut
 prop_cascade_cut = args.percent_short_runs
 
 # set decision variable priorities?
-set_decision_var_priorities = args.set_dvar_priorities
+set_decision_var_priorities = not args.disable_dvar_priorities
 
 # **********************************************************************
 # Define some more parameters related to the problem size and difficulty
@@ -174,6 +217,9 @@ def main_program():
     time_spent_total = clock() # initialize solving time
     robust_opt_cplex.parameters.mip.tolerances.mipgap.set(epgap) # set target optimality gap
     robust_opt_cplex.parameters.timelimit.set(totruntime) # set run time limit
+    robust_opt_cplex.parameters.mip.strategy.nodeselect.set(args.node_select_strategy)
+    robust_opt_cplex.parameters.mip.strategy.variableselect.set(args.variable_select_strategy)
+    robust_opt_cplex.parameters.emphasis.mip.set(args.mip_emphasis)
 
     # enable multithread search
     #robust_opt_cplex.parameters.threads.set(robust_opt_cplex.get_num_cores())
