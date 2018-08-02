@@ -54,5 +54,22 @@ lazy.search.strategy.compare <- tibble(param = "node_select_strategy", param_val
   mutate(runcommand = 
            paste0("python main_program.py --instance_location instance118 --budget 566.933899441341 --load_capacity_factor 0.8 --line_upgrade_capacity_coef_scale 40.2301675977654 --line_establish_cost_coef_scale 10 --line_establish_capacity_coef_scale 80.4603351955307", 
                   " --", param, " ", param_value,
-                  " --dump_file ", dump_file))
+                  " --dump_file ", dump_file),
+         tot.demand = 4242)
+
+write_csv(lazy.search.strategy.compare, "01-08-2018 - compare branch parameters.csv")
+
 write(lazy.search.strategy.compare$runcommand, "../lazy_compare_strategies.bat")
+
+lazy.search.strategy2.compare <- tibble(param = "node_select_strategy", param_value = c(0, 2:3)) %>%
+  bind_rows(tibble(param = "variable_select_strategy", param_value = -1:4),
+            tibble(param = "mip_emphasis", param_value = 1:4)) %>%
+  mutate(dump_file = 120 + seq_along(param)) %>%
+  mutate(runcommand = 
+           paste0("python main_program.py --instance_location instance30 --budget 22.9226341463415 --load_capacity_factor 0.8 --line_upgrade_capacity_coef_scale 8.8390243902439 --line_establish_cost_coef_scale 1 --line_establish_capacity_coef_scale 17.6780487804878", 
+                  " --", param, " ", param_value,
+                  " --dump_file ", dump_file),
+         tot.demand = 189.20)
+
+write_csv(lazy.search.strategy.compare, "02-08-2018 - compare branch parameters - instance30.csv")
+write(lazy.search.strategy2.compare$runcommand, "../lazy_compare_strategies_instance30.bat")
