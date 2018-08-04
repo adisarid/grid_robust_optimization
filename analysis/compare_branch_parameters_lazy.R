@@ -7,7 +7,9 @@ setwd("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/")
 source("analysis/grid_sunken_cost.R")
 
 res <- read_csv("c:/temp/grid_cascade_output/dump.csv", col_names = c("dump", "value", "runtime")) %>%
-  full_join(read_csv("01-08-2018 - compare branch parameters.csv"), by = c("dump" = "dump_file")) %>%
+  full_join(bind_rows(read_csv("01-08-2018 - compare branch parameters.csv"),
+                      read_csv("02-08-2018 - compare branch parameters - instance30.csv")), 
+            by = c("dump" = "dump_file")) %>%
   mutate(percent_supplied = value/tot.demand) %>% 
   arrange(desc(percent_supplied)) %>%
   left_join(readxl::read_xlsx("01-08-2018 -branch.param.explain.xlsx"))
