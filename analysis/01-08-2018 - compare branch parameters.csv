@@ -13,3 +13,4 @@ mip_emphasis,2,111,python main_program.py --instance_location instance118 --budg
 mip_emphasis,3,112,python main_program.py --instance_location instance118 --budget 566.933899441341 --load_capacity_factor 0.8 --line_upgrade_capacity_coef_scale 40.2301675977654 --line_establish_cost_coef_scale 10 --line_establish_capacity_coef_scale 80.4603351955307 --mip_emphasis 3 --dump_file 112,4242
 mip_emphasis,4,113,python main_program.py --instance_location instance118 --budget 566.933899441341 --load_capacity_factor 0.8 --line_upgrade_capacity_coef_scale 40.2301675977654 --line_establish_cost_coef_scale 10 --line_establish_capacity_coef_scale 80.4603351955307 --mip_emphasis 4 --dump_file 113,4242
 heuristic,4,114,,4242
+,,115,combination of best 3 methods,4242
