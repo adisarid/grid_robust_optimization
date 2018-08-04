@@ -16,7 +16,7 @@ base.batch.options <- expand.grid(instance = c(30, 57, 118, 300),
                                   load_capacity_factor = c(0.7, 0.8),
                                   budget.factor = c(0.3, 0.5),
                                   algorithm = c("robustness_heuristic_upper_bound.py",
-                                                "main_program.py",
+                                                "main_program.py --mip_emphasis 1",
                                                 "main_program_one_depth_cascade.py")) %>%
   left_join(prep.grid.data) %>%
   mutate(tot_cap_installed = tot_cap_installed*load_capacity_factor) %>%
@@ -71,5 +71,5 @@ lazy.search.strategy2.compare <- tibble(param = "node_select_strategy", param_va
                   " --dump_file ", dump_file),
          tot.demand = 189.20)
 
-write_csv(lazy.search.strategy.compare, "02-08-2018 - compare branch parameters - instance30.csv")
+write_csv(lazy.search.strategy2.compare, "02-08-2018 - compare branch parameters - instance30.csv")
 write(lazy.search.strategy2.compare$runcommand, "../lazy_compare_strategies_instance30.bat")
