@@ -1078,7 +1078,7 @@ def build_nx_grid(nodes, edges, current_solution, dvar_pos):
     edge_list = [(min(edge[1], edge[2]), max(edge[1], edge[2])) for edge in edges if edge[0] == 'c']
 
     add_edges_1 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]]*args.line_upgrade_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if (edges[('c',) + cur_edge] > 0)]
-    add_edges_2 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]]*args.line_upgrade_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if ('X_i' + cur_edge[0] + '_j' + cur_edge[1] in dvar_pos.keys()) and (current_solution[dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]]> 0.01)]
+    add_edges_2 = [(cur_edge[0], cur_edge[1], {'capacity': edges[('c',) + cur_edge] + current_solution[dvar_pos['c_i' + cur_edge[0] + '_j' + cur_edge[1]]]*args.line_upgrade_capacity_coef_scale + args.line_establish_capacity_coef_scale, 'susceptance': edges[('x',) + cur_edge]}) for cur_edge in edge_list if ('X_i' + cur_edge[0] + '_j' + cur_edge[1] in dvar_pos.keys()) and (current_solution[dvar_pos['X_i' + cur_edge[0] + '_j' + cur_edge[1]]]> 0.01)]
 
     # Debugging
     #timestampstr = strftime('%d-%m-%Y %H-%M-%S - ', gmtime()) + str(round(clock(), 3)) + ' - '
