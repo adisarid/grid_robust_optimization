@@ -73,3 +73,15 @@ lazy.search.strategy2.compare <- tibble(param = "node_select_strategy", param_va
 
 write_csv(lazy.search.strategy2.compare, "02-08-2018 - compare branch parameters - instance30.csv")
 write(lazy.search.strategy2.compare$runcommand, "../lazy_compare_strategies_instance30.bat")
+
+
+# generating a table of costs to export to latex document
+export_tbl <- base.batch.options %>% 
+  filter(load_capacity_factor == 0.8) %>%
+  select(instance, average.edge.capacity, tot_edges_installed, tot_potential_edges, line_establish_cost, line_upgrade_cost, max.expanse, load_capacity_factor) %>% 
+    unique() %>% 
+    mutate(load_capacity_factor = load_capacity_factor*1.5) %>% 
+  select(-load_capacity_factor) %>%
+  mutate(upgrade_establish_ratio = line_upgrade_cost/line_establish_cost) %>%
+  mutate_at(.vars = c(2, 5:8), .funs = funs(round(., 2)))
+knitr::kable(export_tbl, "latex", booktabs = T)
