@@ -18,4 +18,4 @@ branch_settings_explained <- readxl::read_xlsx("01-08-2018 -branch.param.explain
 
 summary_file <- list(res = res, branch_settings = branch_settings_explained)
 
-#openxlsx::write.xlsx(summary_file, file = "02-08-2018 - compare branch params.xlsx")
+#openxlsx::write.xlsx(summary_file, file = "c:/temp/04-08-2018 - compare branch params.xlsx")
