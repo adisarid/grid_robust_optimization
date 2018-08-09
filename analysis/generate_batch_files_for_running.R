@@ -16,8 +16,8 @@ base.batch.options <- expand.grid(instance = c(30, 57, 118, 300),
                                   load_capacity_factor = c(0.7, 0.8),
                                   budget.factor = c(0.3, 0.5),
                                   algorithm = c("robustness_heuristic_upper_bound.py",
-                                                "main_program.py --mip_emphasis 1 --timelimit 12 --export_results_file",
-                                                "main_program_one_depth_cascade.py --timelimit 12 --export_results_file")) %>%
+                                                "main_program.py --mip_emphasis 1 --time_limit 12 --export_results_file",
+                                                "main_program_one_depth_cascade.py --time_limit 12 --export_results_file")) %>%
   left_join(prep.grid.data) %>%
   mutate(tot_cap_installed = tot_cap_installed*load_capacity_factor) %>%
   mutate(average.edge.capacity = tot_cap_installed/tot_edges_installed) %>%
@@ -42,7 +42,8 @@ base.batch.options <- expand.grid(instance = c(30, 57, 118, 300),
                              " --line_establish_capacity_coef_scale ", line_establish_capacity_coef_scale,
                              " --dump_file ", dump_file))
 
-write(base.batch.options$runcommand, "../algorithm_comparison.bat")
+write(base.batch.options$runcommand[base.batch.options$instance %in% c(118, 300) &
+                                      base.batch.options$algorithm != "robustness_heuristic_upper_bound.py"], "../algorithm_comparison.bat")
 openxlsx::write.xlsx(x = base.batch.options, file = "new.batch.parameters.xlsx")
 
 
