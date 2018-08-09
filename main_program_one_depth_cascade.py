@@ -165,7 +165,8 @@ def main_program():
         # write results to a file
         if args.export_results_file:
             timestamp = time.strftime('%d-%m-%Y %H-%M-%S-', time.gmtime()) + str(round(time.clock(), 3)) + ' - '
-            write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
+            write_names_values(current_solution, current_var_names,
+                               'c:/temp/grid_cascade_output/' + timestamp + '-' + str(args.dump_file) + '-' + 'temp_sol.csv')
             with open('c:/temp/grid_cascade_output/' + timestamp + 'supply.csv', 'wb') as csvfile:
                 solutionwriter = csv.writer(csvfile, delimiter=',')
                 solutionwriter.writerow(['scenario', 'type', 'value'])

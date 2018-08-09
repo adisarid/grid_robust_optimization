@@ -255,7 +255,9 @@ def main_program():
 
         if write_res_file:
             timestamp = strftime('%d-%m-%Y %H-%M-%S-', gmtime()) + str(round(clock(), 3)) + ' - '
-            write_names_values(current_solution, current_var_names, 'c:/temp/grid_cascade_output/' + timestamp + 'temp_sol.csv')
+            write_names_values(current_solution, current_var_names,
+                               'c:/temp/grid_cascade_output/' + timestamp + '-' +
+                               str(args.dump_file) + '-' + 'temp_sol.csv')
 
 
     # Cancel print to file (initiated for debug purposes).
