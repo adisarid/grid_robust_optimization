@@ -125,6 +125,7 @@ write_res_file = args.export_results_file
 print_cfe_results = args.print_CFE_mid_run_results
 limit_lazy_add = args.limit_lazy_add
 incumbent_display_frequency = args.incumbent_display_frequency
+print_lp = args.print_lp
 
 # The following are used to track the time spent in solution tree (CPLEX) vs. cascade simulation
 time_spent_total = 0 # total time spent on solving the problem
@@ -208,7 +209,7 @@ def main_program():
     robust_opt_cplex = build_results['cplex_problem']
     dvar_pos = build_results['cplex_location_dictionary'] # useful for debugging
 
-    if print_debug:
+    if print_lp:
         robust_opt_cplex.write("c:/temp/grid_cascade_output/tmp_robust_lp.lp")
 
     robust_opt_cplex.register_callback(MyLazy) # register the lazy callback
@@ -607,7 +608,8 @@ def create_cplex_object():
 
     # Make sure that the establishment of edge ('X_', cur_edge) is directly linked to the decision ('c', cur_edge)
     # If edge was upgraded than it has necessarily been established
-    [robust_opt.linear_constraints.add(lin_expr = [[[dvar_pos[('X_', cur_edge)], dvar_pos[('c', cur_edge)]], [1, -1]]], senses = "G", rhs = [epsilon]) for cur_edge in all_edges if ('X_', cur_edge) in dvar_pos.keys()]
+    # X_ij - c_ij >= -epsilon
+    [robust_opt.linear_constraints.add(lin_expr = [[[dvar_pos[('X_', cur_edge)], dvar_pos[('c', cur_edge)]], [1, -1]]], senses = "G", rhs = [-epsilon]) for cur_edge in all_edges if ('X_', cur_edge) in dvar_pos.keys()]
 
     # Last constraint - budget
     # Investment cost constraint sum(h_ij*cl_ij) + sum(h_i*cg_i + H_i*Z_i) + sum(H_ij*X_ij) <= C
