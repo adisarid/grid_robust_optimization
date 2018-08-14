@@ -13,9 +13,6 @@ original_grid <- read_csv("grid_edges.csv") %>%
   left_join(grid_coords %>% rename(x_end = x, y_end = y), by = c("node2" = "label"))
 
 
-# read the solution of the heuristic
-heuristic_solution <- read_csv("grid_edges_heuristic_solution.csv")
-
 # read the solution of the one depth approximation
 one_depth_sol <- read_csv("13-08-2018 04-37-50-20822.785 - -35.0-temp_sol.csv")
 one_depth_supply <- read_csv("13-08-2018 04-37-50-20822.785 - supply.csv")
@@ -73,11 +70,26 @@ sum(budget_used$tot_cost)  # Budget is almost fully utilized
 
 # The heuristic solution - ***IMPORTANT*** old capacity is factored by 0.7 this is for dump#3
 load_capacity_factor <- 0.7
-heuristic_solution %>% 
-  mutate(new_capacity = capacity) %>%
+heuristic_solution <- read_csv("grid_edges_heuristic_solution.csv") %>% 
+  rename(new_capacity = capacity) %>%
+  mutate(min_i = if_else(edge_i<edge_j, edge_i, edge_j),
+         max_j = if_else(edge_i<edge_j, edge_j, edge_i)) %>%
+  select(-edge_i,-edge_j) %>%
+  rename(edge_i = min_i,
+         edge_j = max_j) %>%
   full_join(original_grid %>% 
               rename(edge_i = node1, 
                      edge_j = node2) %>%
-              mutate(old_capacity = capacity*load_capacity_factor)) %>% View()
-
+              mutate(min_i = if_else(edge_i<edge_j, edge_i, edge_j),
+                     max_j = if_else(edge_i<edge_j, edge_j, edge_i)) %>%
+              select(-edge_i,-edge_j) %>%
+              rename(edge_i = min_i,
+                     edge_j = max_j) %>%
+              mutate(old_capacity = capacity*load_capacity_factor) %>%
+              select(-capacity)) %>% 
+  mutate(new_capacity = ifelse(is.na(new_capacity), old_capacity, new_capacity)) %>%
+  mutate(added_capacity = new_capacity - old_capacity) %>%
+  mutate(added_capacity = ifelse(added_capacity < 0.01, 0, added_capacity)) %>%
+  select(edge_i, edge_j, starts_with("cost"),
+         starts_with("x_"), starts_with("y_"), old_capacity, new_capacity, added_capacity)
             
