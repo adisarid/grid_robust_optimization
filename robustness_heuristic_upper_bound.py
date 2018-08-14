@@ -158,7 +158,7 @@ def main_program():
     upgrade_downgrade_step = args.line_upgrade_capacity_coef_scale
     establish_step = args.line_establish_capacity_coef_scale
 
-    # compute the remaining budget after th initial solution has been determined
+    # compute the remaining budget after the initial solution has been determined
     left_budget = compute_left_budget(current_grid.copy(), edges)  # for now, this should equal budget,
     # until a better initial solution is devised
 
@@ -317,19 +317,19 @@ def upgrade(power_grid, fail_count, original_edges, left_budget):
                         and power_grid.has_edge(edge[1], edge[2])
                         and power_grid.get_edge_data(edge[1], edge[2])['capacity'] <
                         original_edges[('c',) + (edge[1], edge[2])] + upgrade_downgrade_step]
-    if establishable_edges == [] and upgradable_edges == []:
-        print 'STOPPING: Reached full upgrade situation. Cannot upgrade further.'
-        sys.exit()
 
     while left_budget > 0:
         selected_operation = random.uniform(0, 1)  # used to randomly select the upgrade method
-        if selected_operation <= upgrade_selection_bias:  # upgrade an edge according to failure counts
+        if selected_operation <= upgrade_selection_bias and len(upgradable_edges) > 0:  # upgrade an edge according to failure counts
             existing_edges = fail_count.keys()
             tot_fails = sum([fail_count[cur_edge] for cur_edge in existing_edges])
             edge_selection_probability = [float(fail_count[cur_edge])/tot_fails for cur_edge in upgradable_edges]
             edge_to_upgrade = upgradable_edges[
                 numpy.random.choice(range(len(upgradable_edges)), 1, edge_selection_probability)[0]
             ]
+        if establishable_edges == [] and upgradable_edges == []:
+            print 'STOPPING: Reached full upgrade situation. Cannot upgrade further.'
+            sys.exit()
         else:  # upgrade a regular edge without applying selection bias
             edge_to_upgrade = random.choice(upgradable_edges+establishable_edges)
         if edge_to_upgrade in establishable_edges:
@@ -339,9 +339,14 @@ def upgrade(power_grid, fail_count, original_edges, left_budget):
                                 susceptance=original_edges[('x',) + edge_to_upgrade])
             left_budget = left_budget - original_edges[('H',) + edge_to_upgrade] - \
                           original_edges[('h',) + edge_to_upgrade]*establish_step
+            # Remove edge from establishable edges:
+            establishable_edges.remove(edge_to_upgrade)
         else:  # edge exists, do an upgrade
             power_grid.edges[edge_to_upgrade]['capacity'] += upgrade_downgrade_step
             left_budget = left_budget - original_edges[('h',) + edge_to_upgrade] * upgrade_downgrade_step
+            # Remove edge from upgradable_edges
+            upgradable_edges.remove(edge_to_upgrade)
+
     return left_budget
 
 
