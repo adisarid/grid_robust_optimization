@@ -189,7 +189,7 @@ def main_program():
             # a better solution was found - update current incumbent TODO: insert a simulated annealing like behaviour
             current_supply.append(temporary_grid_outcome['supply'])
             current_grid = temporary_grid.copy()
-            current_grid_outcome = temporary_grid_outcome
+            current_grid_outcome = temporary_grid_outcome.copy()
             num_improvements += 1
             num_improvements_local += 1
             current_incumbent = True
@@ -258,10 +258,15 @@ def main_program():
             filename = "c:/temp/grid_cascade_output/" + str(time_stamp[0]) + '-' + str(time_stamp[1]).zfill(2) + \
                        '-' + str(time_stamp[2]).zfill(2) + '-' + str(time_stamp[3]).zfill(2) + '-' + \
                        str(time_stamp[4]).zfill(2) + '-' + \
-                       str(time_stamp[5]).zfill(2) + ' - ' + args.instance_location + 'heuristic_sol.gpickle'
+                       str(time_stamp[5]).zfill(2) + ' - ' + args.instance_location + 'heuristic_sol'
         else:
             filename = args.export_final_grid
-        nx.write_gpickle(current_grid, filename)
+        nx.write_gpickle(current_grid, filename + '.gpickle')
+        # export the per scenario statistics
+        with open(filename + '_per_scenario_statistics.csv', 'wb') as scenario_stats_csv:
+            writer = csv.writer(scenario_stats_csv)
+            writer.writerow(['scenario', 'supply'])
+            writer.writerows(current_grid_outcome['supply_per_scenario'])
 
     with open("c:/temp/grid_cascade_output/dump.csv", 'ab') as dump_file:
         writer = csv.writer(dump_file)
@@ -687,7 +692,11 @@ def compute_current_supply(power_grid, scenarios):
                     for cascade_step in range(failed_grids[('s', curr_scenario)]['t'])]
     flatten_failed_edges = [l for sublist in failed_edges for l in sublist]
     failed_count = collections.Counter(flatten_failed_edges)
-    result = {'supply': sum(supplied_per_scenario), 'fail_count': failed_count}
+    result = {'supply': sum(supplied_per_scenario), 'fail_count': failed_count,
+              'supply_per_scenario':
+                  [[cur_scenario[1], sum([failed_grids[cur_scenario]['updated_grid_copy'].nodes[cur_node]['demand']
+                        for cur_node in power_grid.nodes])]
+                   for cur_scenario in failed_grids.keys()]}
     return result
 
 
