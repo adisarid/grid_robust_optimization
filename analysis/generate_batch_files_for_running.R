@@ -86,3 +86,39 @@ export_tbl <- base.batch.options %>%
   mutate(upgrade_establish_ratio = line_upgrade_cost/line_establish_cost) %>%
   mutate_at(.vars = c(2, 5:8), .funs = funs(round(., 2)))
 knitr::kable(export_tbl, "latex", booktabs = T)
+
+
+
+
+
+
+# generate batch file for comparing the effect of changing the parameter "cost coef scale",
+# for the one-depth-cascade algorithm:
+one_depth_cost_coef_comparison <- expand.grid(instance = c(30, 57, 118, 300), 
+                                  load_capacity_factor = 0.7,
+                                  budget.factor = 0.3,
+                                  algorithm = "main_program_one_depth_cascade.py --time_limit 1 --export_results_file --export_final_grid timestamped",
+                                  cost_coef_multiplier = c(0.5, 1)) %>%
+  left_join(prep.grid.data) %>%
+  mutate(tot_cap_installed = tot_cap_installed*load_capacity_factor) %>%
+  mutate(average.edge.capacity = tot_cap_installed/tot_edges_installed) %>%
+  mutate(line_establish_cost_coef_scale = establish.cost*cost_coef_multiplier) %>%
+  mutate(line_establish_capacity_coef_scale = average.edge.capacity,
+         line_upgrade_capacity_coef_scale = average.edge.capacity*0.5) %>% 
+  mutate(dump_file = seq_along(instance)) %>%
+  left_join(tot.demand) %>%
+  left_join(potential.edges) %>%
+  mutate(line_establish_cost = line_establish_cost_coef_scale + upgrade.cost*line_establish_capacity_coef_scale,
+         line_upgrade_cost = upgrade.cost*line_upgrade_capacity_coef_scale) %>%
+  mutate(max.expanse = 
+           tot_potential_edges*line_establish_cost +
+           (tot_edges_installed + tot_potential_edges)*line_upgrade_cost) %>%
+  mutate(budget.constraint = budget.factor*max.expanse) %>%
+  mutate(runcommand = paste0("python ", algorithm,
+                             " --instance_location instance", instance,
+                             " --budget ", budget.constraint,
+                             " --load_capacity_factor ", load_capacity_factor,
+                             " --line_upgrade_capacity_coef_scale ", line_upgrade_capacity_coef_scale,
+                             " --line_establish_cost_coef_scale ", line_establish_cost_coef_scale,
+                             " --line_establish_capacity_coef_scale ", line_establish_capacity_coef_scale,
+                             " --dump_file ", dump_file))
