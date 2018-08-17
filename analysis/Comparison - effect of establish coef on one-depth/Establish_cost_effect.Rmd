@@ -1,0 +1,75 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+As per Michal's requset -- a short analysis on the influence of varying the establishment cost coefficient scale on the solution of the one depth cascade.
+
+Load the information on the batch run that was used to examine the information
+
+```{r}
+library(tidyverse)
+setwd("c:\\Users\\Adi Sarid\\Documents\\GitHub\\grid_robust_opt\\analysis\\Comparison - effect of establish coef on one-depth\\")
+run_parameters <- readxl::read_excel("../16-08-2018-establish_cost_comparison.xlsx") %>%
+  mutate(establish.cost = establish.cost*cost_coef_multiplier) %>%
+  select(instance, establish.cost, upgrade.cost, dump_file)
+  
+```
+
+Now we would like to examine the characteristics of the solutions. Do instances with a lower establishment cost, have more established edges that were not upgraded after establishment?
+
+```{r}
+all_files <- dir(pattern = "temp_sol.csv")
+
+read_stamp <- function(file_name){
+  tmp_res <- read_csv(file_name) %>%
+    mutate(stamp = str_replace_all(file_name, ".0-temp_sol.csv", ""))
+  return(tmp_res)
+}
+
+comparison_results <- map_df(.f = read_stamp, .x = all_files) 
+
+optimality_gaps <- comparison_results %>%
+  filter(name == "Opt. Gap.") %>%
+  select(-name) %>%
+  rename(opt_gap = value) %>%
+  mutate(stamp = as.numeric(stamp))
+
+comparison_clean <- comparison_results %>%
+  mutate(stamp = as.numeric(stamp)) %>%
+  filter(str_detect(name, "X|C|c")) %>%
+  filter(str_detect(name, "_j")) %>% 
+  mutate(var_type = case_when(str_detect(name, "X") ~ "X",
+                              str_detect(name, "c") ~ "C")) %>%
+  mutate(name = str_replace_all(name, "X_i|c|_i", "")) %>%
+  separate(name, into = c("edge_i", "edge_j"), sep = fixed("_j")) %>%
+  mutate(min_i = if_else(edge_i<edge_j, edge_i, edge_j),
+         max_j = if_else(edge_i<edge_j, edge_j, edge_i)) %>%
+  select(-edge_i,-edge_j) %>%
+  mutate(edge_i = as.numeric(min_i),
+         edge_j = as.numeric(max_j)) %>%
+  select(-min_i, -max_j) %>%
+  spread(var_type, value) %>%
+  mutate(upgrade_type = case_when(is.na(X) & C == 1 ~ "Only upgrade",
+                                  X == 1 & C == 0 ~ "Establish",
+                                  X ==1 & C == 1 ~ "Establish and upgrade",
+                                  TRUE ~ "No change")) %>%
+  filter(upgrade_type != "No change") %>%
+  left_join(run_parameters %>% select(dump_file, instance, establish.cost), 
+            by = c("stamp" = "dump_file")) %>%
+  left_join(optimality_gaps) %>%
+  mutate(stamp = 
+           paste0(instance, "-", stamp, "\n(cost=", establish.cost, "\ngap=", round(opt_gap, 2)*100,"%)")) %>%
+  group_by(stamp) %>%
+  count(upgrade_type)
+  
+
+
+
+ggplot(comparison_clean, aes(x = stamp, fill = upgrade_type, y=n)) + 
+  geom_bar(stat = "identity", position = "dodge") + 
+  geom_label(aes(label = n), show.legend = FALSE, position = position_dodge(width = 1))
+  
+
+
+```
