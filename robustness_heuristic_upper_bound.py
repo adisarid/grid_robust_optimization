@@ -379,17 +379,27 @@ def downgrade(power_grid, original_edges, left_budget):
         else:  # don't destruct, just make minor changes to edges (may destruct if small capacity exists)
             edge_to_downgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c' and
                                                power_grid.has_edge(edge[1], edge[2]) and
-                                               original_edges[edge] < power_grid.edges[(edge[1], edge[2])]['capacity']])
-            # compute the capacity to remove (cannot exceed the line's capacity)
-            if power_grid.edges[edge_to_downgrade]['capacity'] - original_edges[('c',) + edge_to_downgrade] \
-                    >= upgrade_downgrade_step:
+                                               original_edges[edge] < power_grid.edges[(edge[1], edge[2])]['capacity'] - 0.01])
+            # compute the capacity to remove (cannot exceed the line's original capacity)
+            if original_edges[('c',) + edge_to_downgrade] == 0 and \
+                    power_grid.edges[edge_to_downgrade]['capacity'] \
+                    >= upgrade_downgrade_step + establish_step - 0.01:
+                # in this case the edge does not exist in the original grid and
+                # in the current solution it was established and upgraded
                 remove_capacity = upgrade_downgrade_step
+            elif original_edges[('c',) + edge_to_downgrade] == 0 and \
+                power_grid.edges[edge_to_downgrade]['capacity'] >= establish_step - 0.01:
+                # For readability, I'm slightly more explicit than what I have to be.
+                # In this case the edge does not exist in the original grid and
+                # in the current solution it was established (with no additional upgrades)
+                remove_capacity = establish_step
             else:
-                remove_capacity = power_grid.edges[edge_to_downgrade]['capacity']
+                # The edge did exist in the original grid, but was upgraded in the current solution
+                remove_capacity = upgrade_downgrade_step
         # do the actual modification to the power grid networkx object
         power_grid.edges[edge_to_downgrade]['capacity'] -= remove_capacity
         left_budget += original_edges[('h',) + edge_to_downgrade] * remove_capacity
-        if power_grid.edges[edge_to_downgrade]['capacity'] == 0:
+        if power_grid.edges[edge_to_downgrade]['capacity'] <= 0.01:
             # if this edge should not exist - remove it and add back establishment cost
             left_budget += original_edges[('H',) + edge_to_downgrade]
             power_grid.remove_edge(edge_to_downgrade[0], edge_to_downgrade[1])
