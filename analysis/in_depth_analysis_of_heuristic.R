@@ -23,7 +23,8 @@ res <- read_csv("Nominal results/dump.csv", col_names = c("dump", "value", "runt
 
 # isolate the heuristic results 
 heuristic_res <- res %>%
-  filter(algorithm.name == "LNS")
+  filter(algorithm.name == "LNS") %>%
+  mutate(dump = as.numeric(dump))
 
 # load all existing edges' data into existing_edges tibble
 existing_edges <- map_df(.f = function(instance_num){
@@ -32,13 +33,20 @@ existing_edges <- map_df(.f = function(instance_num){
   return(base_instance_edges)
   }, .x = c(30, 57, 118, 300))
 
+# soft equality for avoiding rounding errors
+soft_equality <- function(a, b, thresh_sensitivity = 0.01){
+  is_equal <- a < b + thresh_sensitivity & a > b - thresh_sensitivity
+  return(is_equal)
+}
+
 # function to compute upgrade types and summarize them as a tibble
 summarize_upgrade_type <- function(dump_num){
   
   # get the instance's capacity factor and instance number from dump_number
   heuristic_res %>%
     filter(dump == dump_num) %>%
-    select(load_capacity_factor, instance) -> instance_capacity
+    select(load_capacity_factor, instance, contains("capacity_coef_scale"),
+           contains("factor")) -> instance_capacity
   
   # from dump_num load the proper instance
   existing_edges_filtered <- existing_edges %>%
@@ -62,6 +70,44 @@ summarize_upgrade_type <- function(dump_num){
   # combined data
   combined_origin_solution <- existing_edges_filtered %>%
     left_join(solution_data) %>%
-    mutate(capacity_diff = updated_capacity - original_capacity)
-  
+    mutate_at(.vars = vars(updated_capacity, original_capacity), 
+              .funs = funs(ifelse(is.na(.), 0, .))) %>%
+    mutate(capacity_diff = updated_capacity - original_capacity) %>%
+    mutate(upgrade_type = case_when(soft_equality(capacity_diff, instance_capacity$line_establish_capacity_coef_scale) ~ "Establish",
+                                    soft_equality(capacity_diff, instance_capacity$line_upgrade_capacity_coef_scale) ~ "Upgrade",
+                                    soft_equality(capacity_diff, 
+                                                  instance_capacity$line_upgrade_capacity_coef_scale +
+                                                    instance_capacity$line_establish_capacity_coef_scale) ~ "Establish and upgrade",
+                                    soft_equality(capacity_diff, 0) ~ "No change",
+                                    TRUE ~  "Opps")) %>%
+    mutate(budget_factor = instance_capacity$budget.factor + 1,
+           capacity_factor = instance_capacity$load_capacity_factor) %>%
+    mutate_at(.vars = vars(budget_factor, capacity_factor),
+              .funs = funs(paste0(round((. - 1)*100), "%"))) %>%
+    mutate(budget_factor = paste0("Budget ", budget_factor),
+           capacity_factor = paste0("Capacity ", capacity_factor)) %>%
+    select(instance, capacity_factor, budget_factor, upgrade_type)
 }
+
+all_heuristic_results <- map_df(.f = summarize_upgrade_type, .x = 1:16)
+
+ggplot(all_heuristic_results %>% filter(upgrade_type != "No change"), 
+       aes(x = as.factor(instance),
+           fill = upgrade_type)) + 
+  geom_bar(stat = "count", position = "fill") + 
+  facet_grid(vars(capacity_factor), vars(budget_factor)) + 
+  xlab("Instance") + 
+  ylab("Infrustructure decisions (proportions)") + 
+  scale_y_continuous(labels = scales::percent) + 
+  ggtitle("Upgrade decision distribution in the LNS heuristic") + 
+  labs(fill = "Upgrade Type")
+
+# extract a tibble table
+heuristic_res_tbl <- all_heuristic_results %>%
+  group_by(instance, upgrade_type, budget_factor, capacity_factor) %>%
+  count(upgrade_type) %>%
+  group_by(instance, budget_factor, capacity_factor) %>%
+  filter(upgrade_type != "No change") %>%
+  mutate(prop = n/sum(n)) %>%
+  select(-n) %>%
+  spread(upgrade_type, prop)
