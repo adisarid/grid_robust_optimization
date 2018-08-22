@@ -53,7 +53,7 @@ def main_program():
 
     if not args.brute_force_upper_bound:
         # load the gpickle file
-        G = nx.read_gpickle(os.getcwd() + '\\' + args.qpickle_location)
+        G = nx.read_gpickle(os.getcwd() + '\\' + args.gpickle_location)
     else:
         # load the grid from original files and install everything
         nodes = read_nodes(instance_location + 'grid_nodes.csv')
