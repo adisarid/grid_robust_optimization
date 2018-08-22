@@ -108,6 +108,12 @@ heuristic_res_tbl <- all_heuristic_results %>%
   count(upgrade_type) %>%
   group_by(instance, budget_factor, capacity_factor) %>%
   filter(upgrade_type != "No change") %>%
-  mutate(prop = n/sum(n)) %>%
-  select(-n) %>%
-  spread(upgrade_type, prop)
+  spread(upgrade_type, n) %>%
+  left_join(res %>%
+              select(instance, tot_edges_installed, tot_potential_edges)) %>%
+  unique() %>%
+  mutate(Upgrade = Upgrade/tot_edges_installed,
+         Establish = Establish/tot_potential_edges,
+         `Establish and upgrade` = `Establish and upgrade`/tot_potential_edges)
+
+openxlsx::write.xlsx(heuristic_res_tbl, file = "c:/temp/temp.xlsx")
