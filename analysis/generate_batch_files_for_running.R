@@ -91,7 +91,29 @@ knitr::kable(export_tbl, "latex", booktabs = T)
 
 
 
-# generate batch file for comparing the effect of changing the parameter "cost coef scale",
+# generate batch file for comparing the effect of changing the parameter "cost coef scale", 
+# for all algorithms:
+
+compare_establish_cost <- base.batch.options %>%
+  mutate(line_establish_cost_coef_scale = line_establish_cost_coef_scale/2) %>%
+  mutate(dump_file = dump_file+600) %>%
+  mutate(runcommand = paste0("python ", algorithm,
+                             " --instance_location instance", instance,
+                             " --budget ", budget.constraint,
+                             " --load_capacity_factor ", load_capacity_factor,
+                             " --line_upgrade_capacity_coef_scale ", line_upgrade_capacity_coef_scale,
+                             " --line_establish_cost_coef_scale ", line_establish_cost_coef_scale,
+                             " --line_establish_capacity_coef_scale ", line_establish_capacity_coef_scale,
+                             " --dump_file ", dump_file))
+  
+write(compare_establish_cost$runcommand, "../gaya_establish_cost_sensitivity.bat")
+openxlsx::write.xlsx(x = compare_establish_cost, file = "22-08-2018-establish_cost_sensitivity.xlsx")
+
+
+
+
+
+
 # for the one-depth-cascade algorithm:
 one_depth_cost_coef_comparison <- expand.grid(instance = c(30, 57, 118, 300), 
                                   load_capacity_factor = 0.7,
