@@ -1,0 +1,3 @@
+line_upgrade_cost_coef_scale,line_establish_cost_coef_scale,line_upgrade_capacity_coef_scale,line_establish_capacity_coef_scale,set_decision_var_priorities,runtime,net_runtime_simulations,best_incumbent
+1.0,0.5,8.8390243902439,17.6780487804878,True,15.388060571806639,8.406651555098673,181.79999999999984
+1.0,0.5,8.8390243902439,17.6780487804878,True,69.9133870496574,NA,188.44199999999896
