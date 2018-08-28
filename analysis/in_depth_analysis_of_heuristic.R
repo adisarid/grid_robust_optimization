@@ -58,7 +58,7 @@ summarize_upgrade_type <- function(dump_num){
            node2 = node_j) %>%
     select(-node_i, -node_j) %>%
     rename(original_capacity = capacity) %>%
-    select(instance, node1, node2, original_capacity)
+    select(instance, node1, node2, original_capacity, cost_fixed)
   
   # load solution data from file
   solution_data <- read_csv(paste0("Nominal results/detailed_results/grid_edges_heuristic_solution", dump_num, ".csv")) %>%
@@ -85,8 +85,9 @@ summarize_upgrade_type <- function(dump_num){
     mutate_at(.vars = vars(budget_factor, capacity_factor),
               .funs = funs(paste0(round((. - 1)*100), "%"))) %>%
     mutate(budget_factor = paste0("Budget ", budget_factor),
-           capacity_factor = paste0("Capacity ", capacity_factor)) %>%
-    select(instance, capacity_factor, budget_factor, upgrade_type)
+           capacity_factor = paste0("Capacity ", capacity_factor)) %>% 
+    mutate(edge_old_status = ifelse(cost_fixed == 1, "new", "existing")) %>%
+    select(instance, capacity_factor, budget_factor, upgrade_type, edge_old_status)
 }
 
 all_heuristic_results <- map_df(.f = summarize_upgrade_type, .x = 1:16)
@@ -117,3 +118,23 @@ heuristic_res_tbl <- all_heuristic_results %>%
          `Establish and upgrade` = `Establish and upgrade`/tot_potential_edges)
 
 openxlsx::write.xlsx(heuristic_res_tbl, file = "c:/temp/temp.xlsx")
+
+
+# plot the upgrade decisions as percentage of total available
+upgrade_decisions_usage <- heuristic_res_tbl %>% 
+  select(-tot_potential_edges, -tot_edges_installed) %>%
+  gather(decision_type, proportion, -instance, -budget_factor, -capacity_factor) %>%
+  mutate(proportion = ifelse(is.na(proportion), 0, proportion))
+
+ggplot(upgrade_decisions_usage, aes(x = factor(instance), y = proportion, fill = decision_type)) + 
+  geom_bar(position = "dodge", stat = "identity", color = "black") +
+  facet_grid(vars(capacity_factor), vars(budget_factor)) + 
+  xlab("Instance") + 
+  ylab("Infrustructure decisions (proportions)") + 
+  scale_y_continuous(labels = scales::percent) + 
+  geom_label(aes(label = paste0(round(proportion, 2)*100, "%")), 
+             position = position_dodge(1), show.legend = F, size = 3) +
+  ggtitle("Upgrade decision distribution in the LNS heuristic", 
+          subtitle = "Percentages of 'Establish'; 'Establish and upgrade' are computed out of total new edges potential\n'Upgrade' is computed out of total existing edges") + 
+  labs(fill = "Upgrade Type")
+  
