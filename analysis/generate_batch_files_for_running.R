@@ -109,9 +109,22 @@ compare_establish_cost <- base.batch.options %>%
 write(compare_establish_cost$runcommand, "../gaya_establish_cost_sensitivity.bat")
 openxlsx::write.xlsx(x = compare_establish_cost, file = "22-08-2018-establish_cost_sensitivity.xlsx")
 
+# generate a batch file for half the cost with 12 hours run
+final_12h_runs <- base.batch.options %>%
+  mutate(line_establish_cost_coef_scale = line_establish_cost_coef_scale/2) %>%
+  mutate(dump_file = dump_file+700) %>%
+  mutate(runcommand = paste0("python ", algorithm,
+                             " --instance_location instance", instance,
+                             " --budget ", budget.constraint,
+                             " --load_capacity_factor ", load_capacity_factor,
+                             " --line_upgrade_capacity_coef_scale ", line_upgrade_capacity_coef_scale,
+                             " --line_establish_cost_coef_scale ", line_establish_cost_coef_scale,
+                             " --line_establish_capacity_coef_scale ", line_establish_capacity_coef_scale,
+                             " --dump_file ", dump_file)) %>%
+  mutate(runcommand = str_replace_all(runcommand, fixed("--time_limit 1"), "--time_limit 12"))
 
-
-
+write(final_12h_runs$runcommand[final_12h_runs$instance == 118], "../gaya_final_runs.bat")
+openxlsx::write.xlsx(x = final_12h_runs, file = "11-09-2018-final_runs.xlsx")
 
 
 # for the one-depth-cascade algorithm:
