@@ -67,3 +67,33 @@ res2.compare_half_cost <- res2_half_cost %>% select(-tot.demand) %>%
 res2_joined_tbl <- full_join(res2.compare, res2.compare_half_cost)
 
 #openxlsx::write.xlsx(res2_joined_tbl, file = "27-08-2018 - tmp - table4michal.xlsx")
+
+
+
+
+
+# compare 12 hour final runs
+res_final <- read_csv("12 hours runs/dump.csv", col_names = c("dump", "value", "runtime")) %>%
+  full_join(readxl::read_excel(""), by = c("dump" = "dump_file")) %>%
+  mutate(percent_supplied = value/tot.demand) %>%
+  mutate(algorithm.name = case_when(str_detect(runcommand, "robustness_heuristic_upper_bound.py") ~ "LNS_half_cost",
+                                    str_detect(runcommand, "main_program.py") ~ "Lazy_half_cost",
+                                    str_detect(runcommand, "one_depth") ~ "One.depth_half_cost")) %>%
+  left_join(potential.edges) %>%
+  mutate(line_establish_cost = line_establish_cost_coef_scale + upgrade.cost*line_establish_capacity_coef_scale,
+         line_upgrade_cost = upgrade.cost*line_upgrade_capacity_coef_scale) %>%
+  mutate(max.expanse = 
+           tot_potential_edges*line_establish_cost +
+           (tot_edges_installed + tot_potential_edges)*line_upgrade_cost) %>%
+  mutate(load_capacity_factor = load_capacity_factor*1.5)
+
+
+res2_final <- res_final %>%
+  select(algorithm.name, percent_supplied, tot.demand, instance, load_capacity_factor, 
+         budget.factor, budget.constraint, max.expanse,
+         line_upgrade_cost, line_establish_cost)
+
+res2_compare_final <- res2_final %>% select(-tot.demand) %>%
+  spread(algorithm.name, percent_supplied) %>%
+  rename(line_establish_cost_half_cost = line_establish_cost) %>%
+  select(-max.expanse)

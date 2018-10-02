@@ -123,7 +123,7 @@ final_12h_runs <- base.batch.options %>%
                              " --dump_file ", dump_file)) %>%
   mutate(runcommand = str_replace_all(runcommand, fixed("--time_limit 1"), "--time_limit 12"))
 
-write(final_12h_runs$runcommand[final_12h_runs$instance == 118], "../gaya_final_runs.bat")
+write(final_12h_runs$runcommand[final_12h_runs$instance == 300], "../gaya_final_runs.bat")
 openxlsx::write.xlsx(x = final_12h_runs, file = "11-09-2018-final_runs.xlsx")
 
 
