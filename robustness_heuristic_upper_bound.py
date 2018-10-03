@@ -95,6 +95,10 @@ parser.add_argument('--line_establish_capacity_coef_scale',
 parser.add_argument('--dump_file', help="Save the final objective outcome (number of run), "
                                           "saved to c:/temp/grid_cascade_output/dump.csv",
                     type=float, default=0.0)
+parser.add_argument('--create_registry_file', help="Create a registry file which tracks all actions of the algorithm,"
+                                                   "Enter full path of file name, omit argument for no tracking.",
+                    type=str, default = "False")
+
 # ... add additional arguments as required here ..
 args = parser.parse_args()
 
@@ -109,6 +113,19 @@ global full_destruct_probability  # the probability for full destruction of an e
 full_destruct_probability = args.full_destruct_probability
 global upgrade_selection_bias
 upgrade_selection_bias = args.upgrade_selection_bias
+global create_registry
+create_registry = (args.create_registry_file != "False")
+
+
+# ****************************************************
+# **************** Track decisions *******************
+# ****************************************************
+def write_track(action_description, edge, derived_value):
+    with open(args.create_registry_file + '.csv', 'ab') as registry_track_file:
+        reg_writer = csv.writer(registry_track_file)
+        if not os.path.isfile(args.export_results_tracking):
+            reg_writer.writerow('act_desc', 'edge', 'derived_val', 'current_time')
+        reg_writer.writerow([action_description, edge, derived_value, time.time()])
 
 
 # ****************************************************
@@ -194,8 +211,12 @@ def main_program():
             num_improvements_local += 1
             current_incumbent = True
             local_no_improve = -1  # update local neighborhood since last improvement (the "-1" is increased in a bit)
+            if create_registry:
+                write_track("Found new incumbent", "NA", current_supply[-1])
         else:
             current_incumbent = False
+            if create_registry:
+                write_track("Dropping solution", "NA", temporary_grid_outcome['supply'])
         # export current grid statistics to file
         if args.export_results_tracking != "False":
             time_stamp = time.gmtime(current_time)
@@ -235,17 +256,22 @@ def main_program():
             sys.stdout.flush()
         if args.opt_gap >= 1-current_supply[-1]/total_demand:
             continue_flag = False
+            if create_registry:
+                write_track("Halting - reached opt gap", "NA", current_supply[-1])
         if local_no_improve >= args.min_neighbors:
             local_area_jumps += 1
             loops_local = 0
             local_no_improve = 0
             num_improvements_local = 0  # TODO: Something smarter to decide on "jumping" to a different solution
-
+            if create_registry:
+                write_track("Jumping neighborhood", "NA", current_supply[-1])
             # reset grid to original state and start over the search - jumps to a new neighborhood
             temporary_grid = original_grid.copy()
         else:
             # return back to the best solution found so far
             temporary_grid = current_grid.copy()
+            if create_registry:
+                write_track("Reset to incumbent", "NA", current_supply[-1])
         if args.overall_improvement_ratio_threshold >= float(num_improvements)/loop_counter and \
                 local_area_jumps >= args.min_neighborhoods_total-1:
             # in this case the overall ratio is so low, that probably nothing can be done with the heuristic
@@ -346,11 +372,15 @@ def upgrade(power_grid, fail_count, original_edges, left_budget):
                           original_edges[('h',) + edge_to_upgrade]*establish_step
             # Remove edge from establishable edges:
             establishable_edges.remove(edge_to_upgrade)
+            if create_registry:
+                write_track("Upgrade new edge", edge_to_upgrade, "NA")
         else:  # edge exists, do an upgrade
             power_grid.edges[edge_to_upgrade]['capacity'] += upgrade_downgrade_step
             left_budget = left_budget - original_edges[('h',) + edge_to_upgrade] * upgrade_downgrade_step
             # Remove edge from upgradable_edges
             upgradable_edges.remove(edge_to_upgrade)
+            if create_registry:
+                write_track("Upgrade existing edge", edge_to_upgrade, "NA")
 
     return left_budget
 
@@ -376,6 +406,8 @@ def downgrade(power_grid, original_edges, left_budget):
             # compute the capacity to remove (cannot exceed the line's capacity)
             # currently the step is constant so this not needed, but later on will be important
             remove_capacity = power_grid.edges[edge_to_downgrade]['capacity']  # remove entire capacity
+            if create_registry:
+                write_track("Destruct edge", edge_to_downgrade, "NA")
         else:  # don't destruct, just make minor changes to edges (may destruct if small capacity exists)
             edge_to_downgrade = random.choice([(edge[1], edge[2]) for edge in original_edges if edge[0] == 'c' and
                                                power_grid.has_edge(edge[1], edge[2]) and
@@ -396,6 +428,8 @@ def downgrade(power_grid, original_edges, left_budget):
             else:
                 # The edge did exist in the original grid, but was upgraded in the current solution
                 remove_capacity = upgrade_downgrade_step
+            if create_registry:
+                write_track("Downgrade edge", edge_to_downgrade, "NA")
         # do the actual modification to the power grid networkx object
         power_grid.edges[edge_to_downgrade]['capacity'] -= remove_capacity
         left_budget += original_edges[('h',) + edge_to_downgrade] * remove_capacity
@@ -403,6 +437,9 @@ def downgrade(power_grid, original_edges, left_budget):
             # if this edge should not exist - remove it and add back establishment cost
             left_budget += original_edges[('H',) + edge_to_downgrade]
             power_grid.remove_edge(edge_to_downgrade[0], edge_to_downgrade[1])
+            if create_registry:
+                write_track("Destruct edge", edge_to_downgrade, "NA")
+
     return left_budget
 
 
