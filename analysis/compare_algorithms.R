@@ -74,7 +74,7 @@ res2_joined_tbl <- full_join(res2.compare, res2.compare_half_cost)
 
 # compare 12 hour final runs
 res_final <- read_csv("12 hours runs/dump.csv", col_names = c("dump", "value", "runtime")) %>%
-  full_join(readxl::read_excel(""), by = c("dump" = "dump_file")) %>%
+  full_join(readxl::read_excel("11-09-2018-final_runs.xlsx"), by = c("dump" = "dump_file")) %>%
   mutate(percent_supplied = value/tot.demand) %>%
   mutate(algorithm.name = case_when(str_detect(runcommand, "robustness_heuristic_upper_bound.py") ~ "LNS_half_cost",
                                     str_detect(runcommand, "main_program.py") ~ "Lazy_half_cost",
@@ -97,3 +97,5 @@ res2_compare_final <- res2_final %>% select(-tot.demand) %>%
   spread(algorithm.name, percent_supplied) %>%
   rename(line_establish_cost_half_cost = line_establish_cost) %>%
   select(-max.expanse)
+
+#openxlsx::write.xlsx(res2_compare_final, file = "02-10-2018 - tmp - table4michal.xlsx")
