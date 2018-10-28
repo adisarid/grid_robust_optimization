@@ -102,3 +102,37 @@ res2_compare_final <- res2_final %>% select(-tot.demand) %>%
   select(-max.expanse)
 
 #openxlsx::write.xlsx(res2_compare_final, file = "25-10-2018 - tmp - table4michal.xlsx")
+
+
+# plot the final results in a summarizing chart. 
+# The facets will contain load capacity and budget factor
+# The y-axis is algorithm performance. Fill is algorithm. x is the IEEE instance.
+
+res2_final_for_plot <- res2_final %>%
+  mutate(`Algorithm` = recode(algorithm.name,
+                              `Lazy_half_cost` = "Lazy\nConstraints\n",
+                              `LNS_half_cost` = "LNS\nHeuristic\n",
+                              `One.depth_half_cost` = "1-depth\nApproximation\n")) %>%
+  mutate(load_capacity_factor = case_when(load_capacity_factor <= 1.06 ~ "Capacity Tolerance +5%",
+                                          TRUE ~ "Capacity Toloerance +20%")) %>%
+  mutate(budget.factor = case_when(budget.factor == 0.3 ~ "Budget 30%",
+                                   budget.factor == 0.5 ~ "Budget 50%"))
+
+ggplot(res2_final_for_plot, 
+       aes(y = percent_supplied, 
+           x = factor(instance, levels = c(30, 57, 118, 300)),
+           fill = Algorithm)) + 
+  geom_bar(stat = "identity", position = "dodge", color = "black") + 
+  facet_grid(load_capacity_factor ~ budget.factor) + 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_brewer(palette="YlGnBu") +
+  geom_text(aes(label = paste0(round(percent_supplied*100), "%"),
+                y = percent_supplied - 0.1),
+             position = position_dodge(1),
+            angle = -45) + 
+  xlab("IEEE Instance") + 
+  ylab("Percent Supplied [%]") -> summarizing_chart
+
+ggsave(summarizing_chart, 
+       filename = "c:\\Users\\Adi Sarid\\Documents\\GitHub\\git_robustness_2nd_paper\\figures\\12hour_instance_results.eps", 
+       width = 28, height = 17, units = "cm")
