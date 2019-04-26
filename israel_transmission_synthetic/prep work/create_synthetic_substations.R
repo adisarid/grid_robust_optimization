@@ -1,10 +1,9 @@
 # Prep work for creating synthetic transmission substations using the CBS population data
-setwd("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/israel_transmission_synthetic/prep work/")
 # ==== Load libraries ====
 library(tidyverse)
 library(httr) # for handling http requests from google maps API
 
-il.data <- readxl::read_xls("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/israel_transmission_synthetic/prep work/bycode.xls")
+il.data <- readxl::read_xls("bycode.xls")
 
 # filter for population > 1000 
 
@@ -53,9 +52,9 @@ get_coords <- function(address = "Tel Aviv", alternate.address = ""){
 
 # The following operation takes a long time. If file is present, simply load from:
 # location_data_il.csv
-il.data.w.geocoding <- read_csv("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/israel_transmission_synthetic/prep work/location_data_il.csv") %>%
+il.data.w.geocoding <- readr::read_csv("location_data_il.csv") %>%
   rbind(
-    read_csv("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/israel_transmission_synthetic/prep work/location_data_il_small.csv")
+    read_csv("location_data_il_small.csv")
   ) %>%
   filter(lon.coord >= 34 & lon.coord <= 36 & lat.coord >= 29.5 & lat.coord <= 33.3)
 
@@ -77,6 +76,10 @@ library(ggmap)
 library(mapproj)
 
 
+# this IP is secured to a specific IP, 
+# see: https://console.cloud.google.com/apis/credentials?authuser=1&folder=&orgonly=true&project=key-for-use-in-g-1540015077027
+# to update.
+register_google(key = "AIzaSyD7revRgjF3R87fHYDjZaqu_FYQhlBoRUQ")
 isr.map <- get_map(location = "Israel", zoom = 7, maptype = "roadmap", color = "bw")
 
 map1 <- 
