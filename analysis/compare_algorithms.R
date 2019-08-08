@@ -136,3 +136,17 @@ ggplot(res2_final_for_plot,
 ggsave(summarizing_chart, 
        filename = "c:\\Users\\Adi Sarid\\Documents\\GitHub\\git_robustness_2nd_paper\\figures\\12hour_instance_results.eps", 
        width = 28, height = 17, units = "cm")
+
+
+# comparison table of averages
+res2_final_for_plot %>% 
+  select(algorithm.name, percent_supplied, instance) %>%
+  group_by(algorithm.name, instance) %>%
+  summarize(avg_supplied = round(mean(percent_supplied)*100, 1)) %>%
+  spread(instance, avg_supplied) %>%
+  knitr::kable(format = "latex")
+
+res2_final_for_plot %>% 
+  select(algorithm.name, percent_supplied, instance) %>%
+  group_by(algorithm.name) %>%
+  summarize(avg_supplied = round(mean(percent_supplied)*100, 1))
