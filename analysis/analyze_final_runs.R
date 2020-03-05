@@ -1,11 +1,9 @@
 library(tidyverse)
 
-setwd("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/")
-
 source("analysis/grid_sunken_cost.R")
 
-res <- read_csv("12 hours runs/dump.csv", col_names = c("dump", "value", "runtime")) %>%
-  full_join(readxl::read_excel("11-09-2018-final_runs.xlsx"), by = c("dump" = "dump_file")) %>%
+res <- read_csv("analysis/12 hours runs/dump.csv", col_names = c("dump", "value", "runtime")) %>%
+  full_join(readxl::read_excel("analysis/11-09-2018-final_runs.xlsx"), by = c("dump" = "dump_file")) %>%
   mutate(percent_supplied = value/tot.demand) %>%
   mutate(algorithm.name = case_when(str_detect(runcommand, "robustness_heuristic_upper_bound.py") ~ "LNS",
                                     str_detect(runcommand, "main_program.py") ~ "Lazy",

@@ -1,8 +1,7 @@
 # Analyze sunken cost data for modified IEEE power grids
 library(tidyverse)
-setwd("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/analysis/")
 
-instance_list <- paste0("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/instance", 
+instance_list <- paste0("instance", 
                         c(24, 30, 39, 57, 118, 300), "/grid_edges.csv")
 
 all.data <- tibble(instance_list, instance = c(24, 30, 39, 57, 118, 300)) %>%
@@ -34,7 +33,7 @@ instance.edge.costs <- tibble(instance = c(30, 57, 118, 300),
 
 
 # compute total demand
-tot.demand <- tibble(instance.list = paste0("c:/Users/Adi Sarid/Documents/GitHub/grid_robust_opt/instance",
+tot.demand <- tibble(instance.list = paste0("instance",
                      c(24, 30, 39, 57, 118, 300), "/grid_nodes.csv")) %>%
   mutate(instance = c(24, 30, 39, 57, 118, 300)) %>%
   group_by(instance.list, instance) %>%
