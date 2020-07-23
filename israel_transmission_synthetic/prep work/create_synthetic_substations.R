@@ -79,7 +79,7 @@ library(mapproj)
 # this IP is secured to a specific IP, 
 # see: https://console.cloud.google.com/apis/credentials?authuser=1&folder=&orgonly=true&project=key-for-use-in-g-1540015077027
 # to update.
-register_google(key = "AIzaSyD7revRgjF3R87fHYDjZaqu_FYQhlBoRUQ")
+register_google(key = "ENTER_KEY_HERE")
 isr.map <- get_map(location = "Israel", zoom = 7, maptype = "roadmap", color = "bw")
 
 map1 <- 
